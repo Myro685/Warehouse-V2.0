@@ -68,7 +68,7 @@ namespace WarehouseSim.Managers
             AGVController idleAGV = fleet.Find(a => a.IsIdle);
             if (idleAGV == null)
             {
-                Debug.LogWarning("TaskSystem: Všechna vozidla aktuálně pracují, nelze odbavit.");
+                Debug.LogWarning($"TaskSystem: Objednávka zamítnuta! Flotila má aktuálně {fleet.Count} aut, ale pracují.");
                 return;
             }
 
@@ -126,7 +126,7 @@ namespace WarehouseSim.Managers
             AGVController idleAGV = fleet.Find(a => a.IsIdle);
             if (idleAGV == null)
             {
-                Debug.LogWarning("TaskSystem: Žádné volné AGV pro vyřízení objednávky.");
+                Debug.LogWarning($"TaskSystem: Žádné volné AGV pro vyřízení objednávky. Aut ve flotile: {fleet.Count}");
                 return;
             }
 

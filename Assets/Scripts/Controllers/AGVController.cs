@@ -37,6 +37,20 @@ namespace WarehouseSim.Controllers
         private List<Node> _currentPath;
         private int _targetPathIndex;
         private bool _isMoving;
+        private void Awake()
+        {
+            // Záchrana Prefabů: Když se z auta stal Prefab projektového souboru,
+            // smazaly se mu ukazatele do scény pro Grid a Pathfinding. Najdeme je proto kódem!
+            if (gridManager == null) gridManager = FindObjectOfType<GridManager>();
+            if (pathfindingManager == null) pathfindingManager = FindObjectOfType<PathfindingManager>();
+
+            // Automatická self-registrace IHNED při zrodu (Awake je rychlejší než Start)
+            TaskSystem ts = FindObjectOfType<TaskSystem>();
+            if (ts != null && !ts.fleet.Contains(this))
+            {
+                ts.fleet.Add(this);
+            }
+        }
 
         private void Start()
         {
@@ -44,6 +58,16 @@ namespace WarehouseSim.Controllers
             {
                 Node startNode = gridManager.GetNode(startCoords.x, startCoords.y);
                 if (startNode != null) transform.position = startNode.GetWorldPosition(gridManager.gridConfig.nodeSize);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            // Odhlášení ze směny při zničení auta
+            TaskSystem ts = FindObjectOfType<TaskSystem>();
+            if (ts != null && ts.fleet.Contains(this))
+            {
+                ts.fleet.Remove(this);
             }
         }
 
