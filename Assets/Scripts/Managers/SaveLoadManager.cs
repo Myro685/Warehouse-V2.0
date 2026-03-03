@@ -113,6 +113,9 @@ namespace WarehouseSim.Managers
                         ZoneController zc = newObj.GetComponent<ZoneController>();
                         if (zc != null) zc.gridPosition = new Vector2Int(block.x, block.y);
 
+                        RackController rc = newObj.GetComponent<RackController>();
+                        if (rc != null) rc.gridPosition = new Vector2Int(block.x, block.y);
+
                         loadedCount++;
                     }
                 }

@@ -94,10 +94,15 @@ namespace WarehouseSim.Controllers
                 
                 if (currentTool == BuildTool.Wall) node.Type = NodeType.Wall;
                 
-                // Hack: Pokud položíme zónu rovnou myší, její kontroler si v ZoneController.Start 
-                // může špatně vypočítat Grid X a Y, pojďme mu jej zde natvrdo vnutit ihned
+                // Ujištění, že si myší postavený objekt nebude myslet že je na souřadnicích 0,0
                 ZoneController zc = newObj.GetComponent<ZoneController>();
                 if (zc != null) zc.gridPosition = gridPos;
+
+                RackController rc = newObj.GetComponent<RackController>();
+                if (rc != null) rc.gridPosition = gridPos;
+                
+                AGVController ac = newObj.GetComponent<AGVController>();
+                if (ac != null) ac.startCoords = gridPos;
             }
         }
 
