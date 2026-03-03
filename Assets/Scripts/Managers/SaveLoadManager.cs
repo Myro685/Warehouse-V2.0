@@ -18,9 +18,17 @@ namespace WarehouseSim.Managers
     }
 
     [System.Serializable]
+    public class SavedAGV
+    {
+        public float posX;
+        public float posZ;
+    }
+
+    [System.Serializable]
     public class WarehouseSaveData
     {
         public List<SavedBlock> blocks = new List<SavedBlock>();
+        public List<SavedAGV> agvs = new List<SavedAGV>();
     }
 
     /// <summary>
@@ -47,12 +55,18 @@ namespace WarehouseSim.Managers
                 for (int y = 0; y < gridManager.gridConfig.gridY; y++)
                 {
                     Node node = gridManager.GetNode(x, y);
-                    // Pro tuto fázi ukládáme Zeď a Regál
-                    if (node != null && (node.Type == NodeType.Wall || node.Type == NodeType.Rack))
+                    // Nyní ukládáme Zdi, Regály A NAVÍC logistické rampy!
+                    if (node != null && (node.Type == NodeType.Wall || node.Type == NodeType.Rack || node.Type == NodeType.InboundZone || node.Type == NodeType.OutboundZone))
                     {
                         data.blocks.Add(new SavedBlock { x = x, y = y, type = node.Type });
                     }
                 }
+            }
+
+            // Uložení AGVček
+            foreach (var agv in FindObjectsOfType<AGVController>())
+            {
+                data.agvs.Add(new SavedAGV { posX = agv.transform.position.x, posZ = agv.transform.position.z });
             }
 
             string json = JsonUtility.ToJson(data, true);
@@ -83,23 +97,38 @@ namespace WarehouseSim.Managers
                     Vector3 worldPos = node.GetWorldPosition(gridManager.gridConfig.nodeSize);
                     
                     // Rozhodnutí o prefabu podle uloženého typu z JSONu
-                    GameObject prefab = block.type == NodeType.Rack ? buildManager.rackPrefab : buildManager.wallPrefab;
-                    
+                    GameObject prefab = null;
+                    if (block.type == NodeType.Rack) prefab = buildManager.rackPrefab;
+                    else if (block.type == NodeType.Wall) prefab = buildManager.wallPrefab;
+                    else if (block.type == NodeType.InboundZone) prefab = buildManager.inboundPrefab;
+                    else if (block.type == NodeType.OutboundZone) prefab = buildManager.outboundPrefab;
+
                     if (prefab != null)
                     {
-                        Instantiate(prefab, worldPos, Quaternion.identity);
+                        GameObject newObj = Instantiate(prefab, worldPos, Quaternion.identity);
                         
-                        // Rack se postará o svou node sám, Zeď zapíšeme ručně
-                        if (block.type == NodeType.Wall)
-                        {
-                            node.Type = NodeType.Wall;
-                        }
+                        // Rack a Zony se postaraji o uzly samy
+                        if (block.type == NodeType.Wall) node.Type = NodeType.Wall;
+                        
+                        ZoneController zc = newObj.GetComponent<ZoneController>();
+                        if (zc != null) zc.gridPosition = new Vector2Int(block.x, block.y);
 
                         loadedCount++;
                     }
                 }
             }
-            Debug.Log($"[Save/Load] Skladová struktura obnovena. Načteno {loadedCount} překážek.");
+
+            // Načtení AGV vozítek
+            foreach (var agvData in data.agvs)
+            {
+                if (buildManager.agvPrefab != null)
+                {
+                    Vector3 pos = new Vector3(agvData.posX, buildManager.agvPrefab.transform.position.y, agvData.posZ);
+                    Instantiate(buildManager.agvPrefab, pos, Quaternion.identity);
+                }
+            }
+
+            Debug.Log($"[Save/Load] Skladová struktura obnovena. Načteno {loadedCount} objektů a {data.agvs.Count} AGVček.");
         }
     }
 }

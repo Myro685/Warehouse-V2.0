@@ -16,11 +16,9 @@ namespace WarehouseSim.Managers
         [Header("Systems Architecture")]
         public RackManager rackManager;
         
-        [Header("Physical Zones")]
-        [Tooltip("Zkopíruj sem GameObject Inbound Zóny ze scény")]
-        public ZoneController inboundZone;
-        [Tooltip("Zkopíruj sem GameObject Outbound Zóny ze scény")]
-        public ZoneController outboundZone;
+        [Header("Physical Zones (Automaticky nahlázené ze scény)")]
+        public List<ZoneController> inboundZones = new List<ZoneController>();
+        public List<ZoneController> outboundZones = new List<ZoneController>();
 
         [Header("AGV Fleet")]
         [Tooltip("Vloženo pro sledování - všechna dostupná AGV")]
@@ -50,11 +48,14 @@ namespace WarehouseSim.Managers
         // ==========================================
         public void CreateInboundTask()
         {
-            if (inboundZone == null) 
+            if (inboundZones.Count == 0) 
             { 
-                Debug.LogError("TaskSystem: Chybí reference na Inbound Zónu!"); 
+                Debug.LogError("TaskSystem: Nemáš postavenou žádnou Inbound Zónu! Postav ji přes Editor (BuildManager)."); 
                 return; 
             }
+
+            // Vybereme náhodnou zónu (V budoucnu lze přidat logiku nejbližší volné rampy)
+            ZoneController inboundZone = inboundZones[Random.Range(0, inboundZones.Count)];
 
             // Hledání regálu s místem
             RackController targetRack = rackManager.GetAvailableRackForStorage();
@@ -109,11 +110,13 @@ namespace WarehouseSim.Managers
         // ==========================================
         public void CreateOutboundTask()
         {
-            if (outboundZone == null)
+            if (outboundZones.Count == 0)
             {
-                Debug.LogError("TaskSystem: Chybí reference na Outbound zónu!");
+                Debug.LogError("TaskSystem: Chybí Outbound zóna pro expedici! Postav ji nejdříve.");
                 return;
             }
+
+            ZoneController outboundZone = outboundZones[Random.Range(0, outboundZones.Count)];
 
             // Najít regál, který MA NĚJAKÉ ZBOŽÍ (není prázdný)
             RackController loadedRack = rackManager.AllRacks.Find(r => !r.IsEmpty);

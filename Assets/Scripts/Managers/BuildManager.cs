@@ -6,6 +6,8 @@ using WarehouseSim.Managers;
 
 namespace WarehouseSim.Controllers
 {
+    public enum BuildTool { Rack, Wall, Inbound, Outbound, AGV }
+
     public class BuildManager : MonoBehaviour
     {
         [Header("References")]
@@ -14,9 +16,12 @@ namespace WarehouseSim.Controllers
         [Header("Zdroje k postavení (Ze složky Prefabs)")]
         public GameObject rackPrefab;
         public GameObject wallPrefab;
+        public GameObject inboundPrefab;
+        public GameObject outboundPrefab;
+        public GameObject agvPrefab;
 
         [Header("Aktuální nástroj v ruce")]
-        public NodeType currentBuildType = NodeType.Rack;
+        public BuildTool currentTool = BuildTool.Rack;
 
         private void Update()
         {
@@ -60,19 +65,39 @@ namespace WarehouseSim.Controllers
 
             Node node = gridManager.GetNode(gridPos.x, gridPos.y);
             
-            if (node == null || node.Type != NodeType.Empty)
+            // AGV můžeme stavět i na existující Zóně nebo volném poli
+            if (currentTool != BuildTool.AGV && (node == null || node.Type != NodeType.Empty))
             {
                 Debug.LogWarning("Builder: Na této pozici už stojí jiný objekt nebo zóna.");
                 return;
             }
 
             Vector3 worldPos = node.GetWorldPosition(gridManager.gridConfig.nodeSize);
-            GameObject prefabToSpawn = currentBuildType == NodeType.Rack ? rackPrefab : wallPrefab;
+            
+            GameObject prefabToSpawn = null;
+            switch(currentTool)
+            {
+                case BuildTool.Rack: prefabToSpawn = rackPrefab; break;
+                case BuildTool.Wall: prefabToSpawn = wallPrefab; break;
+                case BuildTool.Inbound: prefabToSpawn = inboundPrefab; break;
+                case BuildTool.Outbound: prefabToSpawn = outboundPrefab; break;
+                case BuildTool.AGV: prefabToSpawn = agvPrefab; break;
+            }
             
             if (prefabToSpawn != null)
             {
-                Instantiate(prefabToSpawn, worldPos, Quaternion.identity);
-                if (currentBuildType == NodeType.Wall) node.Type = NodeType.Wall;
+                // Unikátní vynesení výšky, AGV chceme postavit shora nad dlaždici
+                float heightOffset = currentTool == BuildTool.AGV ? 0.3f : 0f;
+                Vector3 spawnPos = new Vector3(worldPos.x, worldPos.y + heightOffset, worldPos.z);
+                
+                GameObject newObj = Instantiate(prefabToSpawn, spawnPos, Quaternion.identity);
+                
+                if (currentTool == BuildTool.Wall) node.Type = NodeType.Wall;
+                
+                // Hack: Pokud položíme zónu rovnou myší, její kontroler si v ZoneController.Start 
+                // může špatně vypočítat Grid X a Y, pojďme mu jej zde natvrdo vnutit ihned
+                ZoneController zc = newObj.GetComponent<ZoneController>();
+                if (zc != null) zc.gridPosition = gridPos;
             }
         }
 
@@ -127,7 +152,10 @@ namespace WarehouseSim.Controllers
             return new Vector2Int(-1, -1);
         }
 
-        public void BtnAction_SelectRackTool() { currentBuildType = NodeType.Rack; }
-        public void BtnAction_SelectWallTool() { currentBuildType = NodeType.Wall; }
+        public void BtnAction_SelectRackTool() { currentTool = BuildTool.Rack; }
+        public void BtnAction_SelectWallTool() { currentTool = BuildTool.Wall; }
+        public void BtnAction_SelectInboundTool() { currentTool = BuildTool.Inbound; }
+        public void BtnAction_SelectOutboundTool() { currentTool = BuildTool.Outbound; }
+        public void BtnAction_SelectAGVTool() { currentTool = BuildTool.AGV; }
     }
 }

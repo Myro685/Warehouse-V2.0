@@ -17,6 +17,26 @@ namespace WarehouseSim.Controllers
         [Tooltip("Kde v gridu má být rampe postavena? (X, Y)")]
         public Vector2Int gridPosition;
 
+        private void Awake()
+        {
+            TaskSystem ts = FindObjectOfType<TaskSystem>();
+            if (ts != null)
+            {
+                if (zoneType == NodeType.InboundZone && !ts.inboundZones.Contains(this)) ts.inboundZones.Add(this);
+                if (zoneType == NodeType.OutboundZone && !ts.outboundZones.Contains(this)) ts.outboundZones.Add(this);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            TaskSystem ts = FindObjectOfType<TaskSystem>();
+            if (ts != null)
+            {
+                if (zoneType == NodeType.InboundZone && ts.inboundZones.Contains(this)) ts.inboundZones.Remove(this);
+                if (zoneType == NodeType.OutboundZone && ts.outboundZones.Contains(this)) ts.outboundZones.Remove(this);
+            }
+        }
+
         private void Start()
         {
             // Centrování modelu (procedurální zarovnání na milimetry dle gridu)
