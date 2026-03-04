@@ -23,8 +23,8 @@ namespace WarehouseSim.Controllers
         public float minYHeight = 5f;  // Maximální přiblížení krabicím
         public float maxYHeight = 60f; // Vzdálený ptačí pohled nad halou
 
-        [Header("Tažení kamery (Střední tlačítko)")]
-        public float dragSpeed = 0.5f;
+        [Header("Otáčení kamery (Střední tlačítko)")]
+        public float rotationSpeed = 15f;
         private Vector2 lastMousePosition;
         private bool isDragging = false;
 
@@ -32,40 +32,50 @@ namespace WarehouseSim.Controllers
         {
             if (Mouse.current == null || Keyboard.current == null) return;
 
-            HandleMovementKeys();
-            if (useEdgePanning) HandleEdgePanning();
-            HandleMouseDrag();
+            // Získání aktuálních směrových vektorů z pohledu objektivu kamery
+            // Odstraníme "Y", abychom při "W" neletěli do země, ale horizontálně!
+            Vector3 camForward = transform.forward;
+            camForward.y = 0;
+            camForward.Normalize();
+
+            Vector3 camRight = transform.right;
+            camRight.y = 0;
+            camRight.Normalize();
+
+            HandleMovementKeys(camForward, camRight);
+            if (useEdgePanning) HandleEdgePanning(camForward, camRight);
+            
+            HandleMouseRotation();
             HandleZoom();
         }
 
-        private void HandleMovementKeys()
+        private void HandleMovementKeys(Vector3 forward, Vector3 right)
         {
             Vector3 moveDirection = Vector3.zero;
 
-            // Globální posuny nezávisle na rotaci kamery v X/Z ose skladu
-            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) moveDirection += Vector3.forward;
-            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) moveDirection += Vector3.back;
-            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) moveDirection += Vector3.left;
-            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) moveDirection += Vector3.right;
+            // Plynulý pohyb po skladišti s ohledem na to, kam se hráč právě kouká!
+            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) moveDirection += forward;
+            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) moveDirection -= forward;
+            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) moveDirection += right;
+            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) moveDirection -= right;
 
             transform.Translate(moveDirection.normalized * moveSpeed * Time.deltaTime, Space.World);
         }
 
-        private void HandleEdgePanning()
+        private void HandleEdgePanning(Vector3 forward, Vector3 right)
         {
             Vector3 moveDirection = Vector3.zero;
             Vector2 mousePos = Mouse.current.position.ReadValue();
 
-            // Kontrola okrajů obrazovky (nahoru, doů, leva, prava)
-            if (mousePos.y >= Screen.height - edgePanBorderThickness) moveDirection += Vector3.forward;
-            if (mousePos.y <= edgePanBorderThickness) moveDirection += Vector3.back;
-            if (mousePos.x >= Screen.width - edgePanBorderThickness) moveDirection += Vector3.right;
-            if (mousePos.x <= edgePanBorderThickness) moveDirection += Vector3.left;
+            if (mousePos.y >= Screen.height - edgePanBorderThickness) moveDirection += forward;
+            if (mousePos.y <= edgePanBorderThickness) moveDirection -= forward;
+            if (mousePos.x >= Screen.width - edgePanBorderThickness) moveDirection += right;
+            if (mousePos.x <= edgePanBorderThickness) moveDirection -= right;
 
             transform.Translate(moveDirection.normalized * edgePanSpeed * Time.deltaTime, Space.World);
         }
 
-        private void HandleMouseDrag()
+        private void HandleMouseRotation()
         {
             Vector2 mousePos = Mouse.current.position.ReadValue();
 
@@ -82,13 +92,17 @@ namespace WarehouseSim.Controllers
                 isDragging = false;
             }
 
-            // Aplikování tažení v obráceném směru pohybu myši (jako v mapách)
+            // Aplikování horizontální a vertikální rotace kamery!
             if (isDragging)
             {
                 Vector2 delta = mousePos - lastMousePosition;
-                Vector3 move = new Vector3(-delta.x, 0, -delta.y) * dragSpeed * Time.deltaTime;
                 
-                transform.Translate(move, Space.World);
+                // Rotace do stran (kolem Y osy světa = doleva / doprava)
+                transform.Rotate(Vector3.up, delta.x * rotationSpeed * Time.deltaTime, Space.World);
+                
+                // Rotace nahoru/dolů (kolem X osy samotné kamery)
+                transform.Rotate(Vector3.right, -delta.y * rotationSpeed * Time.deltaTime, Space.Self);
+                
                 lastMousePosition = mousePos;
             }
         }
