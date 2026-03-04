@@ -63,16 +63,26 @@ namespace WarehouseSim.Controllers
             if (gridPos.x < 0 || gridPos.y < 0 || gridPos.x >= gridManager.gridConfig.gridX || gridPos.y >= gridManager.gridConfig.gridY) 
                 return; 
 
-            Node node = gridManager.GetNode(gridPos.x, gridPos.y);
+            int width = currentTool == BuildTool.Rack ? 4 : 1; // Nový Asset Store regál je velký přes 4 bloky!
             
-            // AGV můžeme stavět i na existující Zóně nebo volném poli
-            if (currentTool != BuildTool.AGV && (node == null || node.Type != NodeType.Empty))
+            // Kontrola volného místa pro všechny bloky nového velko-objektu
+            if (currentTool != BuildTool.AGV)
             {
-                Debug.LogWarning("Builder: Na této pozici už stojí jiný objekt nebo zóna.");
-                return;
+                for (int i = 0; i < width; i++)
+                {
+                    if (gridPos.x + i >= gridManager.gridConfig.gridX) return; // Jsem okrajem mapy venku!
+                    
+                    Node n = gridManager.GetNode(gridPos.x + i, gridPos.y);
+                    if (n == null || n.Type != NodeType.Empty)
+                    {
+                        Debug.LogWarning("Builder: Nedostatek místa pro celou šířku obřího regálu.");
+                        return;
+                    }
+                }
             }
 
-            Vector3 worldPos = node.GetWorldPosition(gridManager.gridConfig.nodeSize);
+            Node rootNode = gridManager.GetNode(gridPos.x, gridPos.y);
+            Vector3 worldPos = rootNode.GetWorldPosition(gridManager.gridConfig.nodeSize);
             
             GameObject prefabToSpawn = null;
             switch(currentTool)
@@ -92,7 +102,19 @@ namespace WarehouseSim.Controllers
                 
                 GameObject newObj = Instantiate(prefabToSpawn, spawnPos, Quaternion.identity);
                 
-                if (currentTool == BuildTool.Wall) node.Type = NodeType.Wall;
+                if (currentTool == BuildTool.Wall) rootNode.Type = NodeType.Wall;
+                
+                if (currentTool == BuildTool.Rack) 
+                {
+                    rootNode.Type = NodeType.Rack; // Mozek regálu na první (levé) buňce
+                    
+                    // Bezpečnostně neprodyšně zavřeme zbylé 3 buňky pod modelem
+                    for (int i = 1; i < 4; i++) 
+                    {
+                        Node partNode = gridManager.GetNode(gridPos.x + i, gridPos.y);
+                        if (partNode != null) partNode.Type = NodeType.RackPart;
+                    }
+                }
                 
                 // Ujištění, že si myší postavený objekt nebude myslet že je na souřadnicích 0,0
                 ZoneController zc = newObj.GetComponent<ZoneController>();
@@ -114,13 +136,19 @@ namespace WarehouseSim.Controllers
             Ray ray = cam.ScreenPointToRay(Mouse.current.position.ReadValue());
             if (Physics.Raycast(ray, out RaycastHit hit))
             {
-                RackController rack = hit.collider.GetComponent<RackController>();
+                // Musíme dát GetComponentInParent, protože Unity Asset modely mají kolidér často uvnitř dětí hierarchie
+                RackController rack = hit.collider.GetComponentInParent<RackController>();
                 
                 if (rack != null)
                 {
-                    Node node = gridManager.GetNode(rack.gridPosition.x, rack.gridPosition.y);
-                    if (node != null) node.Type = NodeType.Empty;
-                    Destroy(hit.collider.gameObject);
+                    // Uvolnit hlavní node i jeho pomocné RackParts
+                    for (int i = 0; i < 4; i++)
+                    {
+                        Node node = gridManager.GetNode(rack.gridPosition.x + i, rack.gridPosition.y);
+                        if (node != null && (node.Type == NodeType.Rack || node.Type == NodeType.RackPart)) 
+                            node.Type = NodeType.Empty;
+                    }
+                    Destroy(rack.gameObject);
                 }
                 else 
                 {

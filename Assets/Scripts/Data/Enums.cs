@@ -11,6 +11,7 @@ namespace WarehouseSim.Data
         Rack,           // Regál se zbožím (AGV sem nevjede, ale obsluhuje ze sousední buňky)
         InboundZone,    // Příjem (místo, kde se objevuje nové zboží k naskladnění)
         OutboundZone,   // Výdej (expedice, sem AGV vozí věci z regálů pro objednávky)
-        RestingZone     // Odpočinková a nabíjecí zóna pro volné vozíky
+        RestingZone,    // Odpočinková a nabíjecí zóna pro volné vozíky
+        RackPart        // Ochranná zóna pro dlouhé 4-blokové regály z Asset Storu
     }
 }

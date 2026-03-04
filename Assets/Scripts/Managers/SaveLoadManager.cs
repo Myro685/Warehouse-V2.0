@@ -98,7 +98,17 @@ namespace WarehouseSim.Managers
                     
                     // Rozhodnutí o prefabu podle uloženého typu z JSONu
                     GameObject prefab = null;
-                    if (block.type == NodeType.Rack) prefab = buildManager.rackPrefab;
+                    if (block.type == NodeType.Rack) 
+                    {
+                        prefab = buildManager.rackPrefab;
+                        
+                        // Znovuvytvoření ochrany pod celým dlouhým Asset Store modelem regálu
+                        for (int i = 1; i < 4; i++) 
+                        {
+                            Node partNode = gridManager.GetNode(block.x + i, block.y);
+                            if (partNode != null) partNode.Type = NodeType.RackPart;
+                        }
+                    }
                     else if (block.type == NodeType.Wall) prefab = buildManager.wallPrefab;
                     else if (block.type == NodeType.InboundZone) prefab = buildManager.inboundPrefab;
                     else if (block.type == NodeType.OutboundZone) prefab = buildManager.outboundPrefab;
