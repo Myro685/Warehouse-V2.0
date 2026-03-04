@@ -48,7 +48,11 @@ namespace WarehouseSim.Core
                     if (!neighbour.IsWalkable || closedSet.Contains(neighbour)) continue;
 
                     // A* Cost = 10 (rovně)
-                    int moveCost = currentNode.GCost + 10;
+                    int penalty = 0;
+                    if (neighbour.Type == NodeType.RestingZone) penalty = 50; // Auta nebudou projíždět skrz parkovací místa, unless it's their final target
+                    else if (neighbour.Type == NodeType.InboundZone || neighbour.Type == NodeType.OutboundZone) penalty = 30;
+                    
+                    int moveCost = currentNode.GCost + 10 + penalty;
                     
                     if (moveCost < neighbour.GCost || !openSet.Contains(neighbour))
                     {

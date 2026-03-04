@@ -19,6 +19,10 @@ namespace WarehouseSim.Controllers
         [Tooltip("Na jakou X, Y dlaždici Gridu chceme tento regál postavit?")]
         public Vector2Int gridPosition;
 
+        [Header("Vizuální Úchyty pro Krabice (Snap Points)")]
+        [Tooltip("Volitelné: Zde přetáhni z editoru prázdné GameObjekty, kam mají krabice ve 3D fyzicky zapadnout. AGV je tam bude milimetrově usazovat.")]
+        public List<Transform> visualSlots = new List<Transform>();
+
         [Header("State (Debug pouhým okem)")]
         [SerializeField] private List<Item> _storedItems = new List<Item>();
 
@@ -30,7 +34,7 @@ namespace WarehouseSim.Controllers
         {
             // Profesionální auto-align: Regál se posune přesně doprostřed určené buňky,
             // takže ho při návrhu levelu nemusíš ve 3D okně ručně posouvat na milimetry přesně!
-            GridManager gm = FindObjectOfType<GridManager>();
+            GridManager gm = FindFirstObjectByType<GridManager>();
             if (gm != null)
             {
                 transform.position = new Vector3(
@@ -41,7 +45,7 @@ namespace WarehouseSim.Controllers
             }
 
             // Automatické zaregistrování do RackManageru ihned na startu (Observer Pattern)
-            RackManager rm = FindObjectOfType<RackManager>();
+            RackManager rm = FindFirstObjectByType<RackManager>();
             if (rm != null)
             {
                 rm.RegisterRack(this); // Pošlu manažerovi zprávu "Ahoj, já tu stojím"
@@ -79,6 +83,33 @@ namespace WarehouseSim.Controllers
             _storedItems.RemoveAt(lastIndex); // Fyzické odebrání z paměti
 
             return itemToRetrieve;
+        }
+
+        /// <summary>
+        /// Vyhledá přesnou souřadnici úchytu v regálu pro nově přijíždějící položku.
+        /// </summary>
+        public Transform GetNextVisualSlot()
+        {
+            if (visualSlots == null || visualSlots.Count == 0) return null;
+            
+            // Kolikátou věc právě teď máme v poli uloženou?
+            int index = _storedItems.Count - 1; 
+            
+            if (index >= 0 && index < visualSlots.Count) return visualSlots[index];
+
+            // Pokud kapacita překročí počet namalovaných 3D slotů, hází se to graficky na poslední místo
+            return visualSlots[visualSlots.Count - 1]; 
+        }
+
+        /// <summary>
+        /// Vrátí všechny uzly, které tento velký objekt ve 2D síti fyzicky zabírá.
+        /// (Zatím hardcoded na náš 4x1 model z Asset Store)
+        /// </summary>
+        public List<Vector2Int> GetFootprint()
+        {
+            List<Vector2Int> footprint = new List<Vector2Int>();
+            for(int i = 0; i < 4; i++) footprint.Add(new Vector2Int(gridPosition.x + i, gridPosition.y));
+            return footprint;
         }
     }
 }

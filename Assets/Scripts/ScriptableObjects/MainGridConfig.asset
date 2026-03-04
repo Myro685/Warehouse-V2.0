@@ -14,5 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WarehouseSim.ScriptableObjects.GridConfig
   gridX: 20
   gridY: 20
-  nodeSize: 1
-  gizmoGap: 0.1
+  nodeSize: 4
+  gizmoGap: 0

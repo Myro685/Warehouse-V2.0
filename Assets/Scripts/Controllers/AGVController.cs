@@ -36,6 +36,12 @@ namespace WarehouseSim.Controllers
         
         // Dynamická paměť pro antikolizní systém (Kde se bude auto nacházet za milisekundu)
         public Vector2Int CurrentTargetNode { get; private set; } = new Vector2Int(-1, -1);
+        
+        // Zásadní mutuační zámek - uzel, ze kterého auto právě odjíždí, ale zatím ho fyzicky 100% neopustilo
+        public Vector2Int PreviousTargetNode { get; private set; } = new Vector2Int(-1, -1);
+        
+        // Kde má auto úplně finální cíl své cesty?
+        public Vector2Int FinalTargetNode { get; private set; } = new Vector2Int(-1, -1);
 
         private List<Node> _currentPath;
         private int _targetPathIndex;
@@ -45,11 +51,11 @@ namespace WarehouseSim.Controllers
         {
             // Záchrana Prefabů: Když se z auta stal Prefab projektového souboru,
             // smazaly se mu ukazatele do scény pro Grid a Pathfinding. Najdeme je proto kódem!
-            if (gridManager == null) gridManager = FindObjectOfType<GridManager>();
-            if (pathfindingManager == null) pathfindingManager = FindObjectOfType<PathfindingManager>();
+            if (gridManager == null) gridManager = FindFirstObjectByType<GridManager>();
+            if (pathfindingManager == null) pathfindingManager = FindFirstObjectByType<PathfindingManager>();
 
             // Automatická self-registrace IHNED při zrodu (Awake je rychlejší než Start)
-            _taskSystem = FindObjectOfType<TaskSystem>();
+            _taskSystem = FindFirstObjectByType<TaskSystem>();
             if (_taskSystem != null && !_taskSystem.fleet.Contains(this))
             {
                 _taskSystem.fleet.Add(this);
@@ -73,7 +79,7 @@ namespace WarehouseSim.Controllers
         private void OnDestroy()
         {
             // Odhlášení ze směny při zničení auta
-            TaskSystem ts = FindObjectOfType<TaskSystem>();
+            TaskSystem ts = FindFirstObjectByType<TaskSystem>();
             if (ts != null && ts.fleet.Contains(this))
             {
                 ts.fleet.Remove(this);
@@ -96,6 +102,15 @@ namespace WarehouseSim.Controllers
         /// <summary>
         /// Srdce chytrosti AGV - dojede na místo a samo pošle TaskSystemu zprávu (Action onComplete), že tam je.
         /// </summary>
+        /// <summary>
+        /// Přetížení pro inteligentní obsluhu celého komplexního regálu (obvod)
+        /// </summary>
+        public void MoveToAndNotify(RackController rack, System.Action onComplete)
+        {
+            Vector2Int bestCoord = FindWalkableNeighbor(rack.GetFootprint());
+            MoveToAndNotify(bestCoord, onComplete);
+        }
+
         public void MoveToAndNotify(Vector2Int targetCoords, System.Action onComplete)
         {
             StopAllCoroutines();
@@ -104,15 +119,14 @@ namespace WarehouseSim.Controllers
             int currentX = Mathf.RoundToInt(transform.position.x / gridManager.gridConfig.nodeSize);
             int currentY = Mathf.RoundToInt(transform.position.z / gridManager.gridConfig.nodeSize);
 
-            // !! EXTRÉMNĚ CHYTRÝ DETAIL !!
-            // Pokud jede k RACKU (Regálu), tak by Pathfinding vyhodil chybu, protože Regál svítí jako Zeď.
-            // Naučíme vozík zastavit Z BOKU/ZEPŘEDU u regálu!
+            // Klasické jednobodové bariéry
             Node targetNode = gridManager.GetNode(targetCoords.x, targetCoords.y);
             if (targetNode != null && !targetNode.IsWalkable)
             {
-                targetCoords = FindWalkableNeighbor(targetCoords.x, targetCoords.y);
+                targetCoords = FindWalkableNeighbor(new List<Vector2Int>(){ targetCoords });
             }
 
+            FinalTargetNode = targetCoords; // Zapíšeme finální cíl cesty pro ostatní radarující auta
             _currentPath = pathfindingManager.RequestPath(new Vector2Int(currentX, currentY), targetCoords);
 
             if (_currentPath != null && _currentPath.Count > 0)
@@ -128,33 +142,56 @@ namespace WarehouseSim.Controllers
         }
 
         /// <summary>
-        /// Najde volné políčko vedle regálu. Inteligentně vybere to políčko,
-        /// které je ze stran regálu NEJBLÍŽE aktuální poloze přijíždějícího vozidla!
-        /// Zabraňuje nelogickému objíždění regálu zbytečně na druhou stranu.
+        /// Vyhodnotí okolí všech předaných uzlů a najde nejkratší přístupový bod (Ideální pro 4x1 modely)
         /// </summary>
-        private Vector2Int FindWalkableNeighbor(int targetX, int targetY)
+        private Vector2Int FindWalkableNeighbor(List<Vector2Int> targetFootprint)
         {
             Vector2Int[] dirs = { Vector2Int.down, Vector2Int.up, Vector2Int.left, Vector2Int.right };
             
             int currentX = Mathf.RoundToInt(transform.position.x / gridManager.gridConfig.nodeSize);
             int currentY = Mathf.RoundToInt(transform.position.z / gridManager.gridConfig.nodeSize);
 
-            Vector2Int bestNode = new Vector2Int(targetX, targetY);
+            Vector2Int bestNode = targetFootprint[0];
             float minDistance = float.MaxValue;
+            Vector2Int bestOccupiedNode = targetFootprint[0];
+            float minOccupiedDistance = float.MaxValue;
 
-            foreach (var d in dirs)
+            foreach (var target in targetFootprint)
             {
-                Node n = gridManager.GetNode(targetX + d.x, targetY + d.y);
-                if (n != null && n.IsWalkable) 
+                foreach (var d in dirs)
                 {
-                    float dist = Vector2.Distance(new Vector2(currentX, currentY), new Vector2(n.GridX, n.GridY));
-                    if (dist < minDistance)
+                    Node n = gridManager.GetNode(target.x + d.x, target.y + d.y);
+                    if (n != null && n.IsWalkable) 
                     {
-                        minDistance = dist;
-                        bestNode = new Vector2Int(n.GridX, n.GridY);
+                        float dist = Vector2.Distance(new Vector2(currentX, currentY), new Vector2(n.GridX, n.GridY));
+                        
+                        // Zkontrolujeme, zda tam už nestojí cizí auto!
+                        // DŮLEŽITÉ: U regálů CHCEME kontrolovat i finalTarget, aby si dvě auta nevybrala stejnou dlaždici k obsluze
+                        if (!IsNodeOccupiedByOtherAGV(new Vector2Int(n.GridX, n.GridY), true))
+                        {
+                            if (dist < minDistance)
+                            {
+                                minDistance = dist;
+                                bestNode = new Vector2Int(n.GridX, n.GridY);
+                            }
+                        }
+                        else
+                        {
+                            // Uložíme si toto místo jako "Smolařskou zálohu" pro případ, že regál obstoupila jiná auta zcela ze všech stran
+                            if (dist < minOccupiedDistance)
+                            {
+                                minOccupiedDistance = dist;
+                                bestOccupiedNode = new Vector2Int(n.GridX, n.GridY);
+                            }
+                        }
                     }
                 }
             }
+            
+            // Pojistka: Pokud jsme nenašli VŮBEC ŽÁDNÝ volný přístupový bod (všechny hrany blokují auta), 
+            // vrátíme ten zablokovaný a necháme naše auto narazit na Anti-Deadlock časovač, ať si s tím poradí.
+            if (minDistance == float.MaxValue) return bestOccupiedNode;
+            
             return bestNode;
         }
 
@@ -170,22 +207,55 @@ namespace WarehouseSim.Controllers
                 // ==== ANTI-KOLIZNÍ RADAR ====
                 float waitTimer = 0f;
                 // Dokud je před námi překážka v podobě cizího auta (fyzicky nebo plánovaně)
-                while (IsNodeOccupiedByOtherAGV(nextGridPos))
+                // Pro běžnou jízdu IGNORUJEME finalTarget. Když přes políčko auto jen projíždí, nesmí ho blokovat cizí FinalTarget!
+                while (IsNodeOccupiedByOtherAGV(nextGridPos, false))
                 {
                     yield return null; // Zastavíme a propustíme smyčku (Čekáme)
                     waitTimer += Time.deltaTime;
                     
                     if (waitTimer > 2f)
                     {
-                        // Deadlock pojistka - po 2 sekundách troubení resetneme timer
-                        // V plně produkčním WMS (Warehouse Management) by se zde aktivoval
-                        // dynamický A* přepočet s přidáním cizího auta jako dočasné Stěny do Gridu.
-                        // Pro účely simulace stačí trpělivost.
+                        // DEADLOCK RESOLUTION (Pojistka proti záseku)
                         waitTimer = 0f; 
+                        
+                        Node obstacle = gridManager.GetNode(nextGridPos.x, nextGridPos.y);
+                        Node finalTgt = _currentPath[_currentPath.Count - 1]; // Kam jsme měli celkově dojet?
+                        
+                        // Zásadní oprava pro 2 vozíky potkávající se u regálu: 
+                        // Pokud je bariéra SAMOTNÝ NÁŠ CÍL (Auto 1 zrovna nakládá), NESMÍME zkoušet objížďku, 
+                        // protože vytvořením zdi z našeho cíle pathfinding logicky zhavaruje. Musíme si prostě počkat!
+                        if (obstacle != null && nextGridPos != new Vector2Int(finalTgt.GridX, finalTgt.GridY))
+                        {
+                            // Dočasně zalžeme algoritmu, že zamýšlený cizí uzel na trase je tvrdá neoblomná Zeď
+                            NodeType oldType = obstacle.Type;
+                            obstacle.Type = NodeType.Wall;
+                            
+                            int actX = Mathf.RoundToInt(transform.position.x / gridManager.gridConfig.nodeSize);
+                            int actY = Mathf.RoundToInt(transform.position.z / gridManager.gridConfig.nodeSize);
+                            
+                            // Dynamický přepočet A* z aktuální pozice
+                            List<Node> newPath = pathfindingManager.RequestPath(new Vector2Int(actX, actY), new Vector2Int(finalTgt.GridX, finalTgt.GridY));
+                            
+                            // Vrátíme světidla uzlu do reality, abychom nenabourali simulaci
+                            obstacle.Type = oldType;  
+                            
+                            if (newPath != null && newPath.Count > 0)
+                            {
+                                Debug.Log($"[AGV Deadlock] Zablokováno u {nextGridPos}. Tvoříme Objížďku!");
+                                _currentPath = newPath;
+                                _targetPathIndex = 0;
+                                continue; // KRITICKÝ OBRAT: Místo break (což auto vystřelilo kupředu rovnou do kolize), resetujeme FSM smyčku a prověříme první uzel!
+                            }
+                        }
                     }
                 }
 
-                CurrentTargetNode = nextGridPos; // Zamluvíme si uzel pro sebe!
+                // Zamluvení prostoru pro přejezd
+                int curX = Mathf.RoundToInt(transform.position.x / gridManager.gridConfig.nodeSize);
+                int curY = Mathf.RoundToInt(transform.position.z / gridManager.gridConfig.nodeSize);
+                PreviousTargetNode = new Vector2Int(curX, curY); // Zamkneme dlaždici pod kufrem (tu, kterou opouštíme)
+                
+                CurrentTargetNode = nextGridPos; // Zamluvíme si uzel pro sebe (přední nárazník)!
                 Vector3 targetWorldPos = targetNode.GetWorldPosition(gridManager.gridConfig.nodeSize);
 
                 // Záznam stopy pro budoucí vybarvování tepelné mapy
@@ -209,16 +279,19 @@ namespace WarehouseSim.Controllers
                 }
 
                 transform.position = targetWorldPos;
+                PreviousTargetNode = new Vector2Int(-1, -1); // Kufr opustil předchozí uzel. Může tam najet kdokoli další.
                 _targetPathIndex++;
             }
 
             CurrentTargetNode = new Vector2Int(-1, -1); // Uvolnění rezervace po dojetí do cíle
+            PreviousTargetNode = new Vector2Int(-1, -1);
+            FinalTargetNode = new Vector2Int(-1, -1);
             _isMoving = false;
             _currentPath = null;
             onComplete?.Invoke(); // UPOZORNĚNÍ -> Haló, dojel jsem do cíle! (Zavolá TaskSystem)
         }
 
-        private bool IsNodeOccupiedByOtherAGV(Vector2Int nodePos)
+        private bool IsNodeOccupiedByOtherAGV(Vector2Int nodePos, bool checkFinalTarget = false)
         {
             if (_taskSystem == null) return false;
 
@@ -232,27 +305,19 @@ namespace WarehouseSim.Controllers
 
                 if (agvX == nodePos.x && agvY == nodePos.y) return true;
                 
+                // MULTI-NODE MUTEX: Pokud auto A opouští uzel Z, má ho zamčený v PreviousTargetNode do té doby, dokud celým tělem není v novém uzlu Y.
+                if (agv.PreviousTargetNode == nodePos) return true;
+                
                 // 2) Kontrola rezervace - místo, kam má cizí auto namířeno vklouznout v tomto zlomku vteřiny
                 if (agv.CurrentTargetNode == nodePos) return true;
+                
+                // 3) Kontrola koncového zaparkování - je vůbec smysluplné jet tam, kam někdo jiný už pluje zaparkovat nadobro?
+                // Děláme to POUZE pokud to je výslovně vyžádáno (při hledání volné zóny), ne po cestě uličkou!
+                if (checkFinalTarget && agv.FinalTargetNode == nodePos) return true;
             }
             return false;
         }
 
-        private void OnDrawGizmos()
-        {
-            if (_currentPath != null && gridManager != null && _isMoving)
-            {
-                Gizmos.color = Color.magenta;
-                if (_targetPathIndex < _currentPath.Count)
-                    Gizmos.DrawLine(transform.position, _currentPath[_targetPathIndex].GetWorldPosition(gridManager.gridConfig.nodeSize));
 
-                for (int i = _targetPathIndex; i < _currentPath.Count - 1; i++)
-                {
-                    Vector3 p1 = _currentPath[i].GetWorldPosition(gridManager.gridConfig.nodeSize);
-                    Vector3 p2 = _currentPath[i + 1].GetWorldPosition(gridManager.gridConfig.nodeSize);
-                    Gizmos.DrawLine(p1, p2);
-                }
-            }
-        }
     }
 }

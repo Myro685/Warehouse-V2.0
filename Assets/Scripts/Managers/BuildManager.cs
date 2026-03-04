@@ -6,7 +6,7 @@ using WarehouseSim.Managers;
 
 namespace WarehouseSim.Controllers
 {
-    public enum BuildTool { Rack, Wall, Inbound, Outbound, AGV }
+    public enum BuildTool { Rack, Wall, Inbound, Outbound, Resting, AGV }
 
     public class BuildManager : MonoBehaviour
     {
@@ -18,6 +18,7 @@ namespace WarehouseSim.Controllers
         public GameObject wallPrefab;
         public GameObject inboundPrefab;
         public GameObject outboundPrefab;
+        public GameObject restingPrefab; // Přidáno pro Parkovací doky
         public GameObject agvPrefab;
 
         [Header("Aktuální nástroj v ruce")]
@@ -49,7 +50,7 @@ namespace WarehouseSim.Controllers
         {
             if (Camera.main != null) return Camera.main;
             
-            Camera anyCam = FindObjectOfType<Camera>();
+            Camera anyCam = FindFirstObjectByType<Camera>();
             if (anyCam != null) return anyCam;
 
             Debug.LogError("[BuildManager] Ve scéně není vůbec žádná GameObject Kamera!");
@@ -91,6 +92,7 @@ namespace WarehouseSim.Controllers
                 case BuildTool.Wall: prefabToSpawn = wallPrefab; break;
                 case BuildTool.Inbound: prefabToSpawn = inboundPrefab; break;
                 case BuildTool.Outbound: prefabToSpawn = outboundPrefab; break;
+                case BuildTool.Resting: prefabToSpawn = restingPrefab; break;
                 case BuildTool.AGV: prefabToSpawn = agvPrefab; break;
             }
             
@@ -189,6 +191,7 @@ namespace WarehouseSim.Controllers
         public void BtnAction_SelectWallTool() { currentTool = BuildTool.Wall; }
         public void BtnAction_SelectInboundTool() { currentTool = BuildTool.Inbound; }
         public void BtnAction_SelectOutboundTool() { currentTool = BuildTool.Outbound; }
+        public void BtnAction_SelectRestingTool() { currentTool = BuildTool.Resting; }
         public void BtnAction_SelectAGVTool() { currentTool = BuildTool.AGV; }
     }
 }

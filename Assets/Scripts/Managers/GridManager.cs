@@ -112,10 +112,11 @@ namespace WarehouseSim.Managers
             {
                 NodeType.Empty => new Color(0.8f, 0.8f, 0.8f, 0.4f), // Šedá s poloprůhledností
                 NodeType.Wall => Color.black,
-                NodeType.Rack => Color.blue,
-                NodeType.InboundZone => Color.green,
-                NodeType.OutboundZone => Color.red,
+                NodeType.Rack => Color.clear,         // Přestaneme čmárat modře přes reálné 3D regály!
+                NodeType.InboundZone => Color.clear,  // Přenecháme grafické ztvárnění Prefab dlaždici hráče
+                NodeType.OutboundZone => Color.clear, // Přenecháme grafické ztvárnění Prefab dlaždici hráče
                 NodeType.RestingZone => Color.yellow,
+                NodeType.RackPart => Color.clear,     // Neviditelný blokátor provozu pod regálem
                 _ => Color.white
             };
         }

@@ -64,7 +64,7 @@ namespace WarehouseSim.Managers
             }
 
             // Uložení AGVček
-            foreach (var agv in FindObjectsOfType<AGVController>())
+            foreach (var agv in FindObjectsByType<AGVController>(FindObjectsSortMode.None))
             {
                 data.agvs.Add(new SavedAGV { posX = agv.transform.position.x, posZ = agv.transform.position.z });
             }

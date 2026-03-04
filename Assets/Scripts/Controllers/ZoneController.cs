@@ -17,30 +17,36 @@ namespace WarehouseSim.Controllers
         [Tooltip("Kde v gridu má být rampe postavena? (X, Y)")]
         public Vector2Int gridPosition;
 
+        [Header("Runtime State")]
+        [System.NonSerialized] 
+        public Item currentItem = null; // Pokud je null, zóna je prázdná a může přijmout kamion
+
         private void Awake()
         {
-            TaskSystem ts = FindObjectOfType<TaskSystem>();
+            TaskSystem ts = FindFirstObjectByType<TaskSystem>();
             if (ts != null)
             {
                 if (zoneType == NodeType.InboundZone && !ts.inboundZones.Contains(this)) ts.inboundZones.Add(this);
                 if (zoneType == NodeType.OutboundZone && !ts.outboundZones.Contains(this)) ts.outboundZones.Add(this);
+                if (zoneType == NodeType.RestingZone && !ts.restingZones.Contains(this)) ts.restingZones.Add(this);
             }
         }
 
         private void OnDestroy()
         {
-            TaskSystem ts = FindObjectOfType<TaskSystem>();
+            TaskSystem ts = FindFirstObjectByType<TaskSystem>();
             if (ts != null)
             {
                 if (zoneType == NodeType.InboundZone && ts.inboundZones.Contains(this)) ts.inboundZones.Remove(this);
                 if (zoneType == NodeType.OutboundZone && ts.outboundZones.Contains(this)) ts.outboundZones.Remove(this);
+                if (zoneType == NodeType.RestingZone && ts.restingZones.Contains(this)) ts.restingZones.Remove(this);
             }
         }
 
         private void Start()
         {
             // Centrování modelu (procedurální zarovnání na milimetry dle gridu)
-            GridManager gm = FindObjectOfType<GridManager>();
+            GridManager gm = FindFirstObjectByType<GridManager>();
             if (gm != null)
             {
                 transform.position = new Vector3(

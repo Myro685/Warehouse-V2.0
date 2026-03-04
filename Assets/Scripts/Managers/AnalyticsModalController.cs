@@ -69,7 +69,7 @@ namespace WarehouseSim.Managers
             // 3) Počet aut v běhu (Sonda do TaskSystemu)
             if (txtFleetSize != null)
             {
-                var ts = FindObjectOfType<TaskSystem>();
+                var ts = FindFirstObjectByType<TaskSystem>();
                 int fleetSize = ts != null ? ts.fleet.Count : 0;
                 txtFleetSize.text = $"Aktivních AGV ve skladu: <color=#FFFF00>{fleetSize} vozítek</color>";
             }
@@ -80,7 +80,7 @@ namespace WarehouseSim.Managers
                 int maxV = 0;
                 Vector2Int maxCoords = new Vector2Int(0, 0);
                 
-                var gm = FindObjectOfType<GridManager>();
+                var gm = FindFirstObjectByType<GridManager>();
                 if (gm != null && gm.gridConfig != null) 
                 {
                     for (int x = 0; x < gm.gridConfig.gridX; x++) 

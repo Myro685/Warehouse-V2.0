@@ -11,6 +11,9 @@ namespace WarehouseSim.Data
         public string ItemID { get; private set; }
         public string Name { get; private set; }
         public float Weight { get; private set; }
+        
+        // Fyzická manifestace zboží ve skladu (ukazujeme na skutečný Clone z Prefabu)
+        public UnityEngine.GameObject VisualModel { get; set; }
 
         public Item(string id, string name, float weight)
         {

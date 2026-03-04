@@ -52,7 +52,7 @@ namespace WarehouseSim.Managers
         {
             if (_heatmapData == null)
             {
-                GridManager gm = FindObjectOfType<GridManager>();
+                GridManager gm = FindFirstObjectByType<GridManager>();
                 if (gm != null && gm.gridConfig != null)
                     _heatmapData = new int[gm.gridConfig.gridX, gm.gridConfig.gridY];
             }
@@ -99,7 +99,7 @@ namespace WarehouseSim.Managers
 
         private void CreateHeatmapGrid()
         {
-            GridManager gm = FindObjectOfType<GridManager>();
+            GridManager gm = FindFirstObjectByType<GridManager>();
             if (gm == null) return;
 
             int xSize = gm.gridConfig.gridX;
