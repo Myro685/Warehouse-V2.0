@@ -39,13 +39,22 @@ namespace WarehouseSim.Managers
             }
         }
 
+        public void UnregisterRack(RackController rack)
+        {
+            if (_activeRacks.Contains(rack))
+            {
+                _activeRacks.Remove(rack);
+                // Poznámka: O re-změnu NodeType samotného pole v gridu se stará Buldozer v BuildManageru
+            }
+        }
+
         /// <summary>
         /// Systém příjmu se nás takto naprogramovaně zeptá: "Kde ještě máš prázdno?"
         /// (Používá LINQ framework k nalezení první vyhovující kostky)
         /// </summary>
         public RackController GetAvailableRackForStorage()
         {
-            return _activeRacks.Find(r => !r.IsFull);
+            return _activeRacks.Find(r => r.HasSpaceForNewItem);
         }
 
         public int GetTotalRacksCount()

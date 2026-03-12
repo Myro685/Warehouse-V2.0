@@ -23,8 +23,10 @@ namespace WarehouseSim.Data
         public int GCost { get; set; } 
         // Odhadovaná vzdálenost k cíli (Heuristika H-Cost je pouze pro A*)
         public int HCost { get; set; } 
-        // Celková váha/cena uzlu (F = G + H)
-        public int FCost => GCost + HCost; 
+        // Skrytá dynamická penalta pro zácpy a vykrytí stojících vozů
+        public int TemporaryPenalty { get; set; } = 0;
+        // Celková váha/cena uzlu (F = G + H + dynamické vlivy)
+        public int FCost => GCost + HCost + TemporaryPenalty; 
 
         // Rodičovský uzel (Přes co jsme sem dojeli). 
         // Používá se pro poskládání trasy zpět po nalezení cíle.
@@ -58,6 +60,7 @@ namespace WarehouseSim.Data
         {
             GCost = int.MaxValue;
             HCost = 0;
+            TemporaryPenalty = 0;
             Parent = null;
         }
     }

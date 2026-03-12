@@ -35,11 +35,15 @@ namespace WarehouseSim.UI
         {
             if (rackManager != null && txtCapacity != null)
             {
-                int maxPotential = rackManager.AllRacks.Count * 5; // Každý regál (by default) bere 5
+                int maxPotential = 0;
                 int storedCount = 0;
-                foreach (var r in rackManager.AllRacks) storedCount += r.CurrentItemCount;
+                foreach (var r in rackManager.AllRacks) 
+                {
+                    maxPotential += r.maxCapacity;
+                    storedCount += r.CurrentItemCount;
+                }
 
-                txtCapacity.text = $"Zaplělnenost skladu: {storedCount} / {maxPotential}";
+                txtCapacity.text = $"Zaplněnost skladu: {storedCount} / {maxPotential}";
             }
 
             if (taskSystem != null && txtJobsInfo != null)

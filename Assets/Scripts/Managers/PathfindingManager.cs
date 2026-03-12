@@ -57,6 +57,39 @@ namespace WarehouseSim.Managers
             // DŮLEŽITÉ: Před každým hledáním vyčistíme staré G a H hodnoty paměti v Gridu.
             ResetGridCosts();
 
+            // PŘIDÁNÍ DYNAMICKÝCH ZÁCP (Traffic Congestion Data) 
+            // - abychom zabránili Včelímu Roji, kdy všechny AGV jedou po identické nejrychlejší pixeli
+            var taskSystem = FindFirstObjectByType<TaskSystem>();
+            if (taskSystem != null)
+            {
+                foreach (var agv in taskSystem.fleet)
+                {
+                    // Propíšeme těžkou penalizaci hmoty pod aktuálním i plánovaným umístěním každého auta
+                    int curX = Mathf.RoundToInt(agv.transform.position.x / gridManager.gridConfig.nodeSize);
+                    int curY = Mathf.RoundToInt(agv.transform.position.z / gridManager.gridConfig.nodeSize);
+                    
+                    Node n1 = gridManager.GetNode(curX, curY);
+                    if (n1 != null) n1.TemporaryPenalty += 80;
+
+                    if (agv.CurrentTargetNode.x != -1)
+                    {
+                        Node n2 = gridManager.GetNode(agv.CurrentTargetNode.x, agv.CurrentTargetNode.y);
+                        if (n2 != null) n2.TemporaryPenalty += 80;
+                    }
+                    if (agv.PreviousTargetNode.x != -1)
+                    {
+                        Node n3 = gridManager.GetNode(agv.PreviousTargetNode.x, agv.PreviousTargetNode.y);
+                        if (n3 != null) n3.TemporaryPenalty += 80;
+                    }
+                    if (agv.FinalTargetNode.x != -1)
+                    {
+                        // Extrémní penalta na místo, kde auto finálně bude manipulovat zbožím. Cizí auto si tak na 99 % najde jinou hranu regálu!
+                        Node n4 = gridManager.GetNode(agv.FinalTargetNode.x, agv.FinalTargetNode.y);
+                        if (n4 != null) n4.TemporaryPenalty += 500;
+                    }
+                }
+            }
+
             IPathfinder pathfinder = activeAlgorithm == PathfindingAlgorithm.AStar ? _aStar : _dijkstra;
 
             // Stopky (C# knihovna Diagnostics) pro měření času do obhajoby

@@ -52,56 +52,58 @@ namespace WarehouseSim.Managers
             var am = AnalyticsManager.Instance;
             if (am == null) return;
 
-            // 1) Obyčejná tvrdá data
-            if (txtTotalDeliveries != null) 
-                txtTotalDeliveries.text = $"Celkem vyřízeno objednávek: <color=#00FF00>{am.TotalItemsDelivered} ks</color>";
-            
-            if (txtTotalDistance != null) 
-                txtTotalDistance.text = $"Celková trasa flotily: <color=#00FF00>{am.TotalDistanceTraveled:F1} m</color>";
-            
+            // Sloučení všech dat do jednoho pole, aby se vyhnulo překryvům z důvodu chybějící LayoutGroup ve scéně
+            string fullText = "";
+
+            fullText += $"<size=120%>Celkem vyřízeno objednávek: <color=#00FF00>{am.TotalItemsDelivered} ks</color></size>\n\n";
+            fullText += $"<size=120%>Celková trasa flotily: <color=#00FF00>{am.TotalDistanceTraveled:F1} m</color></size>\n\n";
+
             // 2) Rafinovaný Průměr pro důkaz efektivity A* algoritmu
-            if (txtAvgDistance != null)
-            {
-                float avg = am.TotalItemsDelivered > 0 ? (am.TotalDistanceTraveled / am.TotalItemsDelivered) : 0f;
-                txtAvgDistance.text = $"Efektivita (Průměr na 1 dodávku): <color=#00FFFF>{avg:F1} m</color>";
-            }
+            float avg = am.TotalItemsDelivered > 0 ? (am.TotalDistanceTraveled / am.TotalItemsDelivered) : 0f;
+            fullText += $"<size=120%>Efektivita (Průměr na 1 dodávku): <color=#00FFFF>{avg:F1} m</color></size>\n\n";
 
             // 3) Počet aut v běhu (Sonda do TaskSystemu)
-            if (txtFleetSize != null)
-            {
-                var ts = FindFirstObjectByType<TaskSystem>();
-                int fleetSize = ts != null ? ts.fleet.Count : 0;
-                txtFleetSize.text = $"Aktivních AGV ve skladu: <color=#FFFF00>{fleetSize} vozítek</color>";
-            }
+            var ts = FindFirstObjectByType<TaskSystem>();
+            int fleetSize = ts != null ? ts.fleet.Count : 0;
+            fullText += $"<size=120%>Aktivních AGV ve skladu: <color=#FFFF00>{fleetSize} vozítek</color></size>\n\n";
 
             // 4) Detekce úzkého hrdla skladu (Sken Heatmapy)
-            if (txtBottleneck != null)
+            int maxV = 0;
+            Vector2Int maxCoords = new Vector2Int(0, 0);
+            
+            var gm = FindFirstObjectByType<GridManager>();
+            if (gm != null && gm.gridConfig != null) 
             {
-                int maxV = 0;
-                Vector2Int maxCoords = new Vector2Int(0, 0);
-                
-                var gm = FindFirstObjectByType<GridManager>();
-                if (gm != null && gm.gridConfig != null) 
+                for (int x = 0; x < gm.gridConfig.gridX; x++) 
                 {
-                    for (int x = 0; x < gm.gridConfig.gridX; x++) 
+                    for (int y = 0; y < gm.gridConfig.gridY; y++) 
                     {
-                        for (int y = 0; y < gm.gridConfig.gridY; y++) 
-                        {
-                            int v = am.GetNodeVisits(x, y);
-                            if (v > maxV) 
-                            { 
-                                maxV = v; 
-                                maxCoords = new Vector2Int(x, y); 
-                            }
+                        int v = am.GetNodeVisits(x, y);
+                        if (v > maxV) 
+                        { 
+                            maxV = v; 
+                            maxCoords = new Vector2Int(x, y); 
                         }
                     }
                 }
-
-                if (maxV > 0)
-                    txtBottleneck.text = $"Kritické hrdlo skladu (Uzavírka): <color=#FF0000>Uzel [{maxCoords.x}, {maxCoords.y}] ({maxV}x)</color>";
-                else
-                    txtBottleneck.text = $"Kritické hrdlo skladu (Uzavírka): <color=#888888>Nedostatek dat</color>";
             }
+
+            if (maxV > 0)
+                fullText += $"<size=120%>Kritické hrdlo skladu (Uzavírka): <color=#FF0000>Uzel [{maxCoords.x}, {maxCoords.y}] ({maxV}x)</color></size>";
+            else
+                fullText += $"<size=120%>Kritické hrdlo skladu (Uzavírka): <color=#888888>Nedostatek dat</color></size>";
+
+            // Nastavíme do prvního nalezeného textu, ostatní deaktivujeme
+            if (txtTotalDeliveries != null) 
+            {
+                txtTotalDeliveries.alignment = TextAlignmentOptions.Center;
+                txtTotalDeliveries.text = fullText;
+            }
+
+            if (txtTotalDistance != null) txtTotalDistance.gameObject.SetActive(false);
+            if (txtAvgDistance != null) txtAvgDistance.gameObject.SetActive(false);
+            if (txtFleetSize != null) txtFleetSize.gameObject.SetActive(false);
+            if (txtBottleneck != null) txtBottleneck.gameObject.SetActive(false);
         }
     }
 }

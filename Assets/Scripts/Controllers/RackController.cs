@@ -14,7 +14,7 @@ namespace WarehouseSim.Controllers
     {
         [Header("Settings")]
         [Tooltip("Kolik palet nebo krabic (třída Item) sem maximálně vlezou?")]
-        public int maxCapacity = 5;
+        public int maxCapacity = 48;
 
         [Tooltip("Na jakou X, Y dlaždici Gridu chceme tento regál postavit?")]
         public Vector2Int gridPosition;
@@ -29,6 +29,15 @@ namespace WarehouseSim.Controllers
         public int CurrentItemCount => _storedItems.Count;
         public bool IsFull => CurrentItemCount >= maxCapacity;
         public bool IsEmpty => CurrentItemCount == 0;
+
+        // "Virtuální zámky" - Zabrání tomu, aby dispečer poslal 10 aut do regálu, kde je místo jenom pro 1.
+        public int PendingIncomingItems { get; set; } = 0;
+        public int PendingOutgoingItems { get; set; } = 0;
+
+        // Vrací pravdu, pokud se sečtením fyzických balíků i těch očekávaných na cestě do regálu vejdeme
+        public bool HasSpaceForNewItem => (CurrentItemCount + PendingIncomingItems) < maxCapacity;
+        // Vrací pravdu, pokud v regálu zbyde zboží i po tom, co si z dálky jedoucí auta naberou to své
+        public bool HasAvailableItemForPickup => (CurrentItemCount - PendingOutgoingItems) > 0;
 
         private void Start()
         {
@@ -49,6 +58,15 @@ namespace WarehouseSim.Controllers
             if (rm != null)
             {
                 rm.RegisterRack(this); // Pošlu manažerovi zprávu "Ahoj, já tu stojím"
+            }
+        }
+
+        private void OnDestroy()
+        {
+            RackManager rm = FindFirstObjectByType<RackManager>();
+            if (rm != null)
+            {
+                rm.UnregisterRack(this);
             }
         }
 

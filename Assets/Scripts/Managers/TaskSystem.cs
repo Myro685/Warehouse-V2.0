@@ -33,7 +33,10 @@ namespace WarehouseSim.Managers
         public bool triggerOutboundOrder = false;
         
         [Header("Stress Testing (Performance & Deadlocks)")]
-        public bool enableStressTest = false;
+        public bool stressTestMixed = false;
+        public bool stressTestInboundOnly = false;
+        public bool stressTestOutboundOnly = false;
+
         [Range(0.2f, 5f)]
         public float stressTestInterval = 1.5f;
         private float _stressTimer = 0f;
@@ -60,7 +63,7 @@ namespace WarehouseSim.Managers
             }
 
             // Automatický zátěžový test navržený pro testování extrémů (deadlocky, výkon A*)
-            if (enableStressTest)
+            if (stressTestMixed || stressTestInboundOnly || stressTestOutboundOnly)
             {
                 _stressTimer += Time.deltaTime;
                 if (_stressTimer >= stressTestInterval)
@@ -70,14 +73,25 @@ namespace WarehouseSim.Managers
                     bool canStore = rackManager.GetAvailableRackForStorage() != null;
                     bool canSell = rackManager.AllRacks.Exists(r => !r.IsEmpty);
                     
-                    // Ratio: 60% šance na naskladnění, 40% vyskladnění, abychom měli vždy co vozit
-                    if (canStore && (!canSell || Random.value > 0.4f))
+                    if (stressTestInboundOnly && canStore) 
                     {
                         CreateInboundTask();
                     }
-                    else if (canSell)
+                    else if (stressTestOutboundOnly && canSell) 
                     {
                         CreateOutboundTask();
+                    }
+                    else if (stressTestMixed)
+                    {
+                        // Ratio: 60% šance na naskladnění, 40% vyskladnění, abychom měli vždy co vozit
+                        if (canStore && (!canSell || Random.value > 0.4f))
+                        {
+                            CreateInboundTask();
+                        }
+                        else if (canSell)
+                        {
+                            CreateOutboundTask();
+                        }
                     }
                 }
             }
@@ -180,9 +194,6 @@ namespace WarehouseSim.Managers
                 return;
             }
 
-            // Vybereme náhodnou volnou zónu (V budoucnu lze přidat logiku nejbližší volné rampy)
-            ZoneController inboundZone = freeZones[Random.Range(0, freeZones.Count)];
-
             // Hledání regálu s místem
             RackController targetRack = rackManager.GetAvailableRackForStorage();
             if (targetRack == null)
@@ -190,20 +201,25 @@ namespace WarehouseSim.Managers
                 Debug.LogWarning("TaskSystem: HALA JE PLNÁ! Není regál k uskladnění dodávky.");
                 return;
             }
+            
+            // Rezervujeme 1 virtuální slot v cílovém regálu, aby další objednávka neposlala auto na stejné obsazené místo dřív, než tam tohle auto dojede!
+            targetRack.PendingIncomingItems++;
 
             // Hledání spícího nebo nabíjejícího se robota
             AGVController idleAGV = fleet.Find(a => a.currentState == AGVState.Idle || a.currentState == AGVState.Charging);
             if (idleAGV == null)
             {
                 Debug.LogWarning($"TaskSystem: Objednávka zamítnuta! Flotila má aktuálně {fleet.Count} aut, ale pracují.");
+                targetRack.PendingIncomingItems--;
                 return;
             }
             
             // DŮLEŽITÉ: Nyní pro příjezd zónu vybereme s ohledem na chytré rozložení a vyvarování se překřížení aut
-            inboundZone = GetSmartFreeZone(freeZones, idleAGV);
+            ZoneController inboundZone = GetSmartFreeZone(freeZones, idleAGV);
             if (inboundZone == null)
             {
                 Debug.LogWarning("TaskSystem: Generování INBOUND zrušeno, k Inbound zónám zrovna míří jiná auta!");
+                targetRack.PendingIncomingItems--;
                 return;
             }
 
@@ -252,7 +268,8 @@ namespace WarehouseSim.Managers
             yield return new WaitUntil(() => isReached);
 
             agv.UnloadItem();
-            dropoffRack.StoreItem(cargo);
+            dropoffRack.PendingIncomingItems--; // Uvolnění rezervace
+            dropoffRack.StoreItem(cargo); // Skutečné fyzické doložení do regálu
             
             // Krabice se usídlí fyzicky v regálu
             if (cargo.VisualModel != null)
@@ -292,18 +309,22 @@ namespace WarehouseSim.Managers
                 return;
             }
 
-            // Najít regál, který MÁ NĚJAKÉ ZBOŽÍ (není prázdný)
-            RackController loadedRack = rackManager.AllRacks.Find(r => !r.IsEmpty);
+            // Najít regál, který MÁ NĚJAKÉ ZBOŽÍ (A které už nebylo rozebráno cizími vozy na cestě)
+            RackController loadedRack = rackManager.AllRacks.Find(r => r.HasAvailableItemForPickup);
             if (loadedRack == null)
             {
-                Debug.LogWarning("TaskSystem: Sklad je prázdný! Nemáme co prodat.");
+                Debug.LogWarning("TaskSystem: Sklad je prázdný, nebo je všechno existující zboží právě rozebíráno! Nemáme co prodat.");
                 return;
             }
+            
+            // Zamluvíme si pro toto auto výsostné právo na jednu krabici v tomto regálu
+            loadedRack.PendingOutgoingItems++;
 
             AGVController idleAGV = fleet.Find(a => a.currentState == AGVState.Idle || a.currentState == AGVState.Charging);
             if (idleAGV == null)
             {
                 Debug.LogWarning($"TaskSystem: Žádné volné AGV pro vyřízení objednávky. Aut ve flotile: {fleet.Count}");
+                loadedRack.PendingOutgoingItems--;
                 return;
             }
 
@@ -312,6 +333,7 @@ namespace WarehouseSim.Managers
             if (outboundZone == null)
             {
                 Debug.LogWarning("TaskSystem: Generování OUTBOUND zrušeno, všechny Outbound zóny jsou pod dojezdem.");
+                loadedRack.PendingOutgoingItems--;
                 return;
             }
 
@@ -331,12 +353,14 @@ namespace WarehouseSim.Managers
             if (pickupRack.IsEmpty)
             {
                 Debug.LogWarning($"[Logistika OUT] Zboží z regálu {pickupRack.gridPosition} mezitím zmizelo!");
+                pickupRack.PendingOutgoingItems--; // Uvolníme propadlý zámek
                 agv.currentState = AGVState.Idle;
                 yield break;
             }
 
             // Nabere logicky
-            Item item = pickupRack.RetrieveItem();
+            pickupRack.PendingOutgoingItems--; // Uvolníme tranzitní rezervaci
+            Item item = pickupRack.RetrieveItem(); // Provedeme tvrdý výdej poslední krabice
             agv.LoadItem(item);
             
             // Nabere vizuálně 3D krabici (zpět na vidle vozíku)

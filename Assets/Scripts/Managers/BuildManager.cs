@@ -6,7 +6,7 @@ using WarehouseSim.Managers;
 
 namespace WarehouseSim.Controllers
 {
-    public enum BuildTool { Rack, Wall, Inbound, Outbound, Resting, AGV }
+    public enum BuildTool { Rack, Wall, Inbound, Outbound, Resting, AGV, Remove }
 
     public class BuildManager : MonoBehaviour
     {
@@ -35,12 +35,10 @@ namespace WarehouseSim.Controllers
 
             if (Mouse.current.leftButton.wasPressedThisFrame)
             {
-                PlaceObjectAtMouse();
-            }
-
-            if (Mouse.current.rightButton.wasPressedThisFrame)
-            {
-                RemoveObjectAtMouse();
+                if (currentTool == BuildTool.Remove)
+                    RemoveObjectAtMouse();
+                else
+                    PlaceObjectAtMouse();
             }
         }
 
@@ -135,35 +133,79 @@ namespace WarehouseSim.Controllers
             Camera cam = GetCamera();
             if (cam == null) return;
 
+            // Zkusíme najít objekt primárně přes fyziku (kvůli přesnosti kliknutí na model)
             Ray ray = cam.ScreenPointToRay(Mouse.current.position.ReadValue());
             if (Physics.Raycast(ray, out RaycastHit hit))
             {
-                // Musíme dát GetComponentInParent, protože Unity Asset modely mají kolidér často uvnitř dětí hierarchie
                 RackController rack = hit.collider.GetComponentInParent<RackController>();
+                ZoneController zone = hit.collider.GetComponentInParent<ZoneController>();
+                AGVController agv = hit.collider.GetComponentInParent<AGVController>();
                 
-                if (rack != null)
+                if (rack != null) { RemoveRack(rack); return; }
+                if (zone != null) { RemoveZone(zone); return; }
+                if (agv != null) { RemoveAGV(agv); return; }
+                
+                Vector2Int posPhysics = GetMouseGridPosition();
+                Node nodePhysics = gridManager.GetNode(posPhysics.x, posPhysics.y);
+                if (nodePhysics != null && nodePhysics.Type == NodeType.Wall)
                 {
-                    // Uvolnit hlavní node i jeho pomocné RackParts
-                    for (int i = 0; i < 4; i++)
-                    {
-                        Node node = gridManager.GetNode(rack.gridPosition.x + i, rack.gridPosition.y);
-                        if (node != null && (node.Type == NodeType.Rack || node.Type == NodeType.RackPart)) 
-                            node.Type = NodeType.Empty;
-                    }
-                    Destroy(rack.gameObject);
-                }
-                else 
-                {
-                    Vector2Int pos = GetMouseGridPosition();
-                    Node node = gridManager.GetNode(pos.x, pos.y);
-                    
-                    if (node != null && node.Type == NodeType.Wall)
-                    {
-                        node.Type = NodeType.Empty;
-                        Destroy(hit.collider.gameObject);
-                    }
+                    nodePhysics.Type = NodeType.Empty;
+                    Destroy(hit.collider.gameObject);
+                    return; // Zastavit, abychom nešli do fallbacku, protože zdi se mažou čistě přes raycast
                 }
             }
+
+            // POKUD FYZIKA SELHALA (Např. Regál a AGV nemají 3D Collider, klikli jsme "skrz" ně přímo na zem Gridu),
+            // použijeme matematické vyhledávání pole z GridManageru!
+            Vector2Int pos = GetMouseGridPosition();
+            if (pos.x < 0 || pos.y < 0) return;
+
+            // A) Hledáme AGV
+            foreach (var a in FindObjectsByType<AGVController>(FindObjectsSortMode.None))
+            {
+                int agvX = Mathf.RoundToInt(a.transform.position.x / gridManager.gridConfig.nodeSize);
+                int agvY = Mathf.RoundToInt(a.transform.position.z / gridManager.gridConfig.nodeSize);
+                if (agvX == pos.x && agvY == pos.y) { RemoveAGV(a); return; }
+            }
+
+            // B) Hledáme obří Regál (šířka 4 bloky)
+            foreach (var r in FindObjectsByType<RackController>(FindObjectsSortMode.None))
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    if (r.gridPosition.x + i == pos.x && r.gridPosition.y == pos.y) { RemoveRack(r); return; }
+                }
+            }
+
+            // C) Hledáme Zónu
+            foreach (var z in FindObjectsByType<ZoneController>(FindObjectsSortMode.None))
+            {
+                if (z.gridPosition.x == pos.x && z.gridPosition.y == pos.y) { RemoveZone(z); return; }
+            }
+        }
+
+        private void RemoveRack(RackController rack)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                Node node = gridManager.GetNode(rack.gridPosition.x + i, rack.gridPosition.y);
+                if (node != null && (node.Type == NodeType.Rack || node.Type == NodeType.RackPart)) 
+                    node.Type = NodeType.Empty;
+            }
+            Destroy(rack.gameObject);
+        }
+
+        private void RemoveZone(ZoneController zone)
+        {
+            Node node = gridManager.GetNode(zone.gridPosition.x, zone.gridPosition.y);
+            if (node != null) node.Type = NodeType.Empty;
+            Destroy(zone.gameObject);
+        }
+
+        private void RemoveAGV(AGVController agv)
+        {
+            // O odstranění z flotil se postará událost OnDestroy() uvnitř AGVControlleru
+            Destroy(agv.gameObject);
         }
 
         private Vector2Int GetMouseGridPosition()
@@ -193,5 +235,6 @@ namespace WarehouseSim.Controllers
         public void BtnAction_SelectOutboundTool() { currentTool = BuildTool.Outbound; }
         public void BtnAction_SelectRestingTool() { currentTool = BuildTool.Resting; }
         public void BtnAction_SelectAGVTool() { currentTool = BuildTool.AGV; }
+        public void BtnAction_SelectRemoveTool() { currentTool = BuildTool.Remove; }
     }
 }

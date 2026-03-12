@@ -44,11 +44,11 @@ namespace WarehouseSim.Core
                 {
                     if (!neighbour.IsWalkable || closedSet.Contains(neighbour)) continue;
 
-                    int penalty = 0;
-                    if (neighbour.Type == NodeType.RestingZone) penalty = 50;
-                    else if (neighbour.Type == NodeType.InboundZone || neighbour.Type == NodeType.OutboundZone) penalty = 30;
+                    int staticPenalty = 0;
+                    if (neighbour.Type == NodeType.RestingZone) staticPenalty = 50;
+                    else if (neighbour.Type == NodeType.InboundZone || neighbour.Type == NodeType.OutboundZone) staticPenalty = 30;
 
-                    int moveCost = currentNode.GCost + 10 + penalty;
+                    int moveCost = currentNode.GCost + 10 + staticPenalty + neighbour.TemporaryPenalty;
                     
                     if (moveCost < neighbour.GCost || !openSet.Contains(neighbour))
                     {

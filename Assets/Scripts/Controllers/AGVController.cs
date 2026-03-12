@@ -206,6 +206,8 @@ namespace WarehouseSim.Controllers
                 
                 // ==== ANTI-KOLIZNÍ RADAR ====
                 float waitTimer = 0f;
+                bool _pathRecalculated = false;
+
                 // Dokud je před námi překážka v podobě cizího auta (fyzicky nebo plánovaně)
                 // Pro běžnou jízdu IGNORUJEME finalTarget. Když přes políčko auto jen projíždí, nesmí ho blokovat cizí FinalTarget!
                 while (IsNodeOccupiedByOtherAGV(nextGridPos, false))
@@ -244,11 +246,14 @@ namespace WarehouseSim.Controllers
                                 Debug.Log($"[AGV Deadlock] Zablokováno u {nextGridPos}. Tvoříme Objížďku!");
                                 _currentPath = newPath;
                                 _targetPathIndex = 0;
-                                continue; // KRITICKÝ OBRAT: Místo break (což auto vystřelilo kupředu rovnou do kolize), resetujeme FSM smyčku a prověříme první uzel!
+                                _pathRecalculated = true;
+                                break; // UPUŠTĚNÍ RADARU: Skončilo čekání na uzel, máme novou trasu, prorazit vnitřní while!
                             }
                         }
                     }
                 }
+
+                if (_pathRecalculated) continue; // Přejít na další Frame vnější smyčky a nařídit pohyb podle zcela Nové Trasy (_currentPath[0])!
 
                 // Zamluvení prostoru pro přejezd
                 int curX = Mathf.RoundToInt(transform.position.x / gridManager.gridConfig.nodeSize);
@@ -318,6 +323,29 @@ namespace WarehouseSim.Controllers
             return false;
         }
 
+        private void OnDrawGizmos()
+        {
+            if (_currentPath != null && _currentPath.Count > 0)
+            {
+                Gizmos.color = Color.cyan;
+                Vector3 startPos = transform.position;
+                if (gridManager != null && gridManager.gridConfig != null)
+                {
+                    Vector3 firstNodePos = _currentPath[0].GetWorldPosition(gridManager.gridConfig.nodeSize);
+                    Gizmos.DrawLine(startPos, firstNodePos);
 
+                    for (int i = 0; i < _currentPath.Count - 1; i++)
+                    {
+                        Vector3 a = _currentPath[i].GetWorldPosition(gridManager.gridConfig.nodeSize);
+                        Vector3 b = _currentPath[i + 1].GetWorldPosition(gridManager.gridConfig.nodeSize);
+                        Gizmos.DrawLine(a, b);
+                    }
+                    
+                    // Vykreslení cíle
+                    Gizmos.color = Color.red;
+                    Gizmos.DrawWireCube(_currentPath[_currentPath.Count - 1].GetWorldPosition(gridManager.gridConfig.nodeSize), new Vector3(0.5f, 0.5f, 0.5f));
+                }
+            }
+        }
     }
 }
