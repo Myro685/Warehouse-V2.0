@@ -59,7 +59,7 @@ namespace WarehouseSim.Controllers
             if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) moveDirection += right;
             if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) moveDirection -= right;
 
-            transform.Translate(moveDirection.normalized * moveSpeed * Time.deltaTime, Space.World);
+            transform.Translate(moveDirection.normalized * moveSpeed * Time.unscaledDeltaTime, Space.World);
         }
 
         private void HandleEdgePanning(Vector3 forward, Vector3 right)
@@ -72,7 +72,7 @@ namespace WarehouseSim.Controllers
             if (mousePos.x >= Screen.width - edgePanBorderThickness) moveDirection += right;
             if (mousePos.x <= edgePanBorderThickness) moveDirection -= right;
 
-            transform.Translate(moveDirection.normalized * edgePanSpeed * Time.deltaTime, Space.World);
+            transform.Translate(moveDirection.normalized * edgePanSpeed * Time.unscaledDeltaTime, Space.World);
         }
 
         private void HandleMouseRotation()
@@ -98,10 +98,10 @@ namespace WarehouseSim.Controllers
                 Vector2 delta = mousePos - lastMousePosition;
                 
                 // Rotace do stran (kolem Y osy světa = doleva / doprava)
-                transform.Rotate(Vector3.up, delta.x * rotationSpeed * Time.deltaTime, Space.World);
+                transform.Rotate(Vector3.up, delta.x * rotationSpeed * Time.unscaledDeltaTime, Space.World);
                 
                 // Rotace nahoru/dolů (kolem X osy samotné kamery)
-                transform.Rotate(Vector3.right, -delta.y * rotationSpeed * Time.deltaTime, Space.Self);
+                transform.Rotate(Vector3.right, -delta.y * rotationSpeed * Time.unscaledDeltaTime, Space.Self);
                 
                 lastMousePosition = mousePos;
             }
@@ -116,7 +116,7 @@ namespace WarehouseSim.Controllers
                 float scrollDir = Mathf.Sign(scroll); // Nahoru (1) nebo Dolů (-1)
                 
                 // Přibližujeme přesně ve směru rotace kamery (diagonálně k podlaze)
-                Vector3 zoomMove = transform.forward * scrollDir * zoomSpeed * Time.deltaTime;
+                Vector3 zoomMove = transform.forward * scrollDir * zoomSpeed * Time.unscaledDeltaTime;
                 Vector3 newPos = transform.position + zoomMove;
 
                 // Restrikce výšky, abychom nepropadli texturou podlahy nebo neodletěli na Mars

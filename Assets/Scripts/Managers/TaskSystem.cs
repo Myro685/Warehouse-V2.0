@@ -33,7 +33,7 @@ namespace WarehouseSim.Managers
         public bool triggerOutboundOrder = false;
         
         [Header("Stress Testing (Performance & Deadlocks)")]
-        public bool stressTestMixed = false;
+        public bool stressTestMixed = true;
         public bool stressTestInboundOnly = false;
         public bool stressTestOutboundOnly = false;
 

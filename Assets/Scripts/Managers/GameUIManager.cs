@@ -21,7 +21,23 @@ namespace WarehouseSim.UI
         public TextMeshProUGUI txtCapacity;
         public TextMeshProUGUI txtJobsInfo;
         public TextMeshProUGUI txtAlgorithmInfo;
-        public TextMeshProUGUI txtAnalytics; // NEW: Kolonka pro analytiku
+        public TextMeshProUGUI txtAnalytics; // Doplněno zpět
+
+        [Header("UI Tlačítka (Simulace)")]
+        public Button btnPlay;
+        public Button btnPause;
+
+        private float _currentSimulationSpeed = 1f;
+
+        private void Start()
+        {
+            // Fáze 20: Každá hra začíná ve Stavebním módu (Čas se nehýbe, auta stojí)
+            Time.timeScale = 0f;
+            
+            // Výchozí vizuál tlačítek
+            if (btnPlay != null) btnPlay.interactable = true;
+            if (btnPause != null) btnPause.interactable = false; 
+        }
 
         private void Update()
         {
@@ -86,6 +102,55 @@ namespace WarehouseSim.UI
                     pathfindingManager.activeAlgorithm = PathfindingAlgorithm.Dijkstra;
                 else
                     pathfindingManager.activeAlgorithm = PathfindingAlgorithm.AStar;
+            }
+        }
+
+        // ==========================================
+        // Řízení Času Simulace a Zátěžáku (Fáze 20)
+        // ==========================================
+
+        public void BtnAction_PlaySimulation()
+        {
+            if (_currentSimulationSpeed <= 0f) _currentSimulationSpeed = 1f; // Failsafe
+            Time.timeScale = _currentSimulationSpeed;
+            
+            if (taskSystem != null) taskSystem.stressTestMixed = true; // Rozjetí objednávek!
+            
+            if (btnPlay != null) btnPlay.interactable = false; // "Zamačkni se"
+            if (btnPause != null) btnPause.interactable = true; // "Rozsviť se"
+        }
+
+        public void BtnAction_PauseSimulation()
+        {
+            Time.timeScale = 0f;
+            
+            if (taskSystem != null) taskSystem.stressTestMixed = false; // Vypnutí objednávek
+            
+            if (btnPlay != null) btnPlay.interactable = true;
+            if (btnPause != null) btnPause.interactable = false;
+        }
+
+        // Pro Unity Slider: Hodnoty od 0.5 do 5.0 (Fast Forward)
+        public void SliderAction_SetSimulationSpeed(float speed)
+        {
+            // Pokud ti Slider projde až k nule, hra by se pauzla a zablokovala. Zafixujeme minimální rychlost na 0.1x!
+            _currentSimulationSpeed = Mathf.Max(0.1f, speed);
+            
+            // Pokud simulace zrovna běží, hned tu rychlost upraví
+            if (Time.timeScale != 0f)
+            {
+                Time.timeScale = _currentSimulationSpeed;
+            }
+        }
+
+        // Pro Unity Slider: Třeba 0.5 do 5 vteřin
+        public void SliderAction_SetOrderInterval(float interval)
+        {
+            if (taskSystem != null)
+            {
+                // Pokud Slider pošle nulu (0 vteřin), systém padne do infinite/zero-tick loopu a zamrzne! 
+                // Zafixujeme absolutně nejbrutálnější zátěžák haly matematicky natvrdo na 0.2 vteřiny (5 aut za vteřinu!).
+                taskSystem.stressTestInterval = Mathf.Max(0.2f, interval);
             }
         }
     }

@@ -33,6 +33,10 @@ namespace WarehouseSim.Controllers
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
                 return;
 
+            // Fáze 20: Editor haly (Buldozer, Regály) funguje pouze ve zmraženém čase (Pause)
+            if (Time.timeScale != 0f) 
+                return;
+
             if (Mouse.current.leftButton.wasPressedThisFrame)
             {
                 if (currentTool == BuildTool.Remove)
