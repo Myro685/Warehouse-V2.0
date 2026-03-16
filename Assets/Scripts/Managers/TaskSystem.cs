@@ -122,7 +122,7 @@ namespace WarehouseSim.Managers
                 yield break;
             }
             
-            Debug.Log($"[Flotila] AGV nemá práci, odjíždí do doku na {parkZone.gridPosition}.");
+            NotificationManager.LogInfo($"[Flotila] AGV nemá práci, odjíždí do doku na {parkZone.gridPosition}.");
             
             bool isReached = false;
             agv.MoveToAndNotify(parkZone.gridPosition, () => isReached = true);
@@ -182,7 +182,7 @@ namespace WarehouseSim.Managers
         {
             if (inboundZones.Count == 0) 
             { 
-                Debug.LogError("TaskSystem: Nemáš postavenou žádnou Inbound Zónu! Postav ji přes Editor (BuildManager)."); 
+                NotificationManager.LogError("TaskSystem: Nemáš postavenou žádnou Inbound Zónu! Postav ji přes Editor (BuildManager)."); 
                 return; 
             }
 
@@ -190,7 +190,7 @@ namespace WarehouseSim.Managers
             List<ZoneController> freeZones = inboundZones.FindAll(z => z.currentItem == null);
             if (freeZones.Count == 0)
             {
-                Debug.LogWarning("TaskSystem: Všechny Inbound zóny jsou PLNÉ! Kamiony čekají venku.");
+                NotificationManager.LogWarning("TaskSystem: Všechny Inbound zóny jsou PLNÉ! Kamiony čekají venku.");
                 return;
             }
 
@@ -198,18 +198,21 @@ namespace WarehouseSim.Managers
             RackController targetRack = rackManager.GetAvailableRackForStorage();
             if (targetRack == null)
             {
-                Debug.LogWarning("TaskSystem: HALA JE PLNÁ! Není regál k uskladnění dodávky.");
+                NotificationManager.LogWarning("TaskSystem: HALA JE PLNÁ! Není regál k uskladnění dodávky.");
                 return;
             }
             
             // Rezervujeme 1 virtuální slot v cílovém regálu, aby další objednávka neposlala auto na stejné obsazené místo dřív, než tam tohle auto dojede!
             targetRack.PendingIncomingItems++;
 
-            // Hledání spícího nebo nabíjejícího se robota
-            AGVController idleAGV = fleet.Find(a => a.currentState == AGVState.Idle || a.currentState == AGVState.Charging);
+            // Hledání spícího robota, který MÁ ŠŤÁVU (Nad 15%), nebo robota na nabíječce, který už je skoro plný (Nad 90%)!
+            AGVController idleAGV = fleet.Find(a => 
+                (a.currentState == AGVState.Idle && a.currentBattery > 15f) || 
+                (a.currentState == AGVState.Charging && a.currentBattery >= 90f)
+            );
             if (idleAGV == null)
             {
-                Debug.LogWarning($"TaskSystem: Objednávka zamítnuta! Flotila má aktuálně {fleet.Count} aut, ale pracují.");
+                NotificationManager.LogWarning($"TaskSystem: Objednávka zamítnuta! Flotila má aktuálně {fleet.Count} aut, ale pracují.");
                 targetRack.PendingIncomingItems--;
                 return;
             }
@@ -218,7 +221,7 @@ namespace WarehouseSim.Managers
             ZoneController inboundZone = GetSmartFreeZone(freeZones, idleAGV);
             if (inboundZone == null)
             {
-                Debug.LogWarning("TaskSystem: Generování INBOUND zrušeno, k Inbound zónám zrovna míří jiná auta!");
+                NotificationManager.LogWarning("TaskSystem: Generování INBOUND zrušeno, k Inbound zónám zrovna míří jiná auta!");
                 targetRack.PendingIncomingItems--;
                 return;
             }
@@ -242,7 +245,7 @@ namespace WarehouseSim.Managers
         private IEnumerator ExecuteInboundSequence(AGVController agv, ZoneController pickupZone, RackController dropoffRack, Item cargo)
         {
             agv.currentState = AGVState.MovingToPickup;
-            Debug.Log($"[Logistika IN] AGV vyráží na příjem pro {cargo.ItemID}.");
+            NotificationManager.LogInfo($"[Logistika IN] AGV vyráží na příjem pro {cargo.ItemID}.");
 
             bool isReached = false;
             agv.MoveToAndNotify(pickupZone.gridPosition, () => isReached = true);
@@ -258,7 +261,7 @@ namespace WarehouseSim.Managers
                 cargo.VisualModel.transform.localPosition = new Vector3(0, 0.8f, 0); // Vynese kostku 80cm nad zem
             }
             
-            Debug.Log($"[Logistika IN] Naloženo. Přesun k regálu na pos {dropoffRack.gridPosition}.");
+            NotificationManager.LogInfo($"[Logistika IN] Naloženo. Přesun k regálu na pos {dropoffRack.gridPosition}.");
             yield return new WaitForSeconds(0.5f); 
 
             agv.currentState = AGVState.MovingToDropoff;
@@ -293,7 +296,7 @@ namespace WarehouseSim.Managers
                 }
             }
             
-            Debug.Log($"[Logistika IN] {cargo.ItemID} uloženo do regálu. Mise splněna.");
+            NotificationManager.LogInfo($"[Logistika IN] {cargo.ItemID} uloženo do regálu. Mise splněna.");
 
             agv.currentState = AGVState.Idle;
         }
@@ -305,7 +308,7 @@ namespace WarehouseSim.Managers
         {
             if (outboundZones.Count == 0)
             {
-                Debug.LogError("TaskSystem: Chybí Outbound zóna pro expedici! Postav ji nejdříve.");
+                NotificationManager.LogError("TaskSystem: Chybí Outbound zóna pro expedici! Postav ji nejdříve.");
                 return;
             }
 
@@ -313,17 +316,21 @@ namespace WarehouseSim.Managers
             RackController loadedRack = rackManager.AllRacks.Find(r => r.HasAvailableItemForPickup);
             if (loadedRack == null)
             {
-                Debug.LogWarning("TaskSystem: Sklad je prázdný, nebo je všechno existující zboží právě rozebíráno! Nemáme co prodat.");
+                NotificationManager.LogWarning("TaskSystem: Sklad je prázdný, nebo je všechno existující zboží právě rozebíráno! Nemáme co prodat.");
                 return;
             }
             
             // Zamluvíme si pro toto auto výsostné právo na jednu krabici v tomto regálu
             loadedRack.PendingOutgoingItems++;
 
-            AGVController idleAGV = fleet.Find(a => a.currentState == AGVState.Idle || a.currentState == AGVState.Charging);
+            // Záchranný bateriový systém (Fáze 21)
+            AGVController idleAGV = fleet.Find(a => 
+                (a.currentState == AGVState.Idle && a.currentBattery > 15f) || 
+                (a.currentState == AGVState.Charging && a.currentBattery >= 90f)
+            );
             if (idleAGV == null)
             {
-                Debug.LogWarning($"TaskSystem: Žádné volné AGV pro vyřízení objednávky. Aut ve flotile: {fleet.Count}");
+                NotificationManager.LogWarning($"TaskSystem: Žádné volné AGV pro vyřízení objednávky. Aut ve flotile: {fleet.Count}");
                 loadedRack.PendingOutgoingItems--;
                 return;
             }
@@ -332,7 +339,7 @@ namespace WarehouseSim.Managers
             ZoneController outboundZone = GetSmartFreeZone(outboundZones, idleAGV);
             if (outboundZone == null)
             {
-                Debug.LogWarning("TaskSystem: Generování OUTBOUND zrušeno, všechny Outbound zóny jsou pod dojezdem.");
+                NotificationManager.LogWarning("TaskSystem: Generování OUTBOUND zrušeno, všechny Outbound zóny jsou pod dojezdem.");
                 loadedRack.PendingOutgoingItems--;
                 return;
             }
@@ -343,7 +350,7 @@ namespace WarehouseSim.Managers
         private IEnumerator ExecuteOutboundSequence(AGVController agv, RackController pickupRack, ZoneController dropoffZone)
         {
             agv.currentState = AGVState.MovingToPickup;
-            Debug.Log($"[Logistika OUT] AGV vyráží do skladu k regálu {pickupRack.gridPosition} pro zboží.");
+            NotificationManager.LogInfo($"[Logistika OUT] AGV vyráží do skladu k regálu {pickupRack.gridPosition} pro zboží.");
 
             bool isReached = false;
             agv.MoveToAndNotify(pickupRack.gridPosition, () => isReached = true);
@@ -352,7 +359,7 @@ namespace WarehouseSim.Managers
             // Závodní stav: Pokud cizí vozík přijel dříve a vzal poslední zboží
             if (pickupRack.IsEmpty)
             {
-                Debug.LogWarning($"[Logistika OUT] Zboží z regálu {pickupRack.gridPosition} mezitím zmizelo!");
+                NotificationManager.LogWarning($"[Logistika OUT] Zboží z regálu {pickupRack.gridPosition} mezitím zmizelo!");
                 pickupRack.PendingOutgoingItems--; // Uvolníme propadlý zámek
                 agv.currentState = AGVState.Idle;
                 yield break;
@@ -370,7 +377,7 @@ namespace WarehouseSim.Managers
                 item.VisualModel.transform.localPosition = new Vector3(0, 0.8f, 0);
             }
             
-            Debug.Log($"[Logistika OUT] AGV nabralo položku {item.ItemID}. Jede na Výdej.");
+            NotificationManager.LogInfo($"[Logistika OUT] AGV nabralo položku {item.ItemID}. Jede na Výdej.");
             yield return new WaitForSeconds(0.5f); // Simulace manipulace s krabicí na vidlích
 
             agv.currentState = AGVState.MovingToDropoff;
@@ -391,7 +398,7 @@ namespace WarehouseSim.Managers
             // STATISTIKA PRO BAKALÁŘKU: Úspěšné odbavení
             if (AnalyticsManager.Instance != null) AnalyticsManager.Instance.RegisterItemDelivered();
 
-            Debug.Log($"[Logistika OUT] Objednávka {item.ItemID} doručena na Rampu! Peníze se sypou.");
+            NotificationManager.LogInfo($"[Logistika OUT] Objednávka {item.ItemID} doručena na Rampu! Peníze se sypou.");
 
             agv.currentState = AGVState.Idle; // Vyvěsí vlajku, že je připraveno na další tasky
         }

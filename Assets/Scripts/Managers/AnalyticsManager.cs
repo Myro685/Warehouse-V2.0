@@ -173,5 +173,57 @@ namespace WarehouseSim.Managers
                 return _heatmapData[x, y];
             return 0;
         }
+
+        // ==========================================
+        // DATOVÝ EXPORT (Fáze 21 - Bakalářka)
+        // ==========================================
+        public void ExportToCSV()
+        {
+            // Složka nad vrstvou Assets (Root složka celého Unity Projektu), aby se to hráčům dobře hledalo
+            string folderPath = Application.dataPath + "/../"; 
+            string fileName = "Warehouse_Report_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv";
+            string fullPath = System.IO.Path.Combine(folderPath, fileName);
+
+            System.Text.StringBuilder csv = new System.Text.StringBuilder();
+            
+            // Hlavička dokumentu (Používáme středník, protože evrospký Excel čárky nebere jako oddělovač buněk)
+            csv.AppendLine("Warehouse Simulation - Analytics Report");
+            csv.AppendLine("Datum generovani;" + System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            csv.AppendLine("");
+
+            // Záznam o použitém Pathfindingu
+            PathfindingManager pm = FindFirstObjectByType<PathfindingManager>();
+            string algo = (pm != null) ? pm.activeAlgorithm.ToString() : "Neznamy";
+            csv.AppendLine("Pouziti algoritmus;" + algo);
+            csv.AppendLine("");
+
+            // Hlavní KPI Data
+            csv.AppendLine("METRIKY VYSTUPU");
+            csv.AppendLine("Celkova ujeta vzdalenost (m);" + TotalDistanceTraveled.ToString("F2"));
+            csv.AppendLine("Celkem doruceno krabic;" + TotalItemsDelivered);
+            csv.AppendLine("");
+
+            // Sekce flotily (Stavy Baterií!)
+            TaskSystem ts = FindFirstObjectByType<TaskSystem>();
+            if (ts != null && ts.fleet.Count > 0)
+            {
+                csv.AppendLine("FLOTILA AGV");
+                csv.AppendLine("Jmeno vozu;Zbyvajici Baterie %;Aktualni Stav");
+                foreach (var agv in ts.fleet)
+                {
+                    csv.AppendLine($"{agv.gameObject.name};{agv.currentBattery:F1}%;{agv.currentState}");
+                }
+            }
+
+            try
+            {
+                System.IO.File.WriteAllText(fullPath, csv.ToString());
+                NotificationManager.LogSuccess($"[Analytics] Bakalarsky CSV Report uspesne ulozen do: {fullPath}");
+            }
+            catch (System.Exception e)
+            {
+                NotificationManager.LogError($"[Analytics] Nepodarilo zapsat CSV Report na disk: {e.Message}");
+            }
+        }
     }
 }

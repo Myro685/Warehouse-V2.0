@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using WarehouseSim.Data;
 using WarehouseSim.Managers;
 
@@ -33,6 +34,13 @@ namespace WarehouseSim.Controllers
         public AGVState currentState = AGVState.Idle;
         public Item loadedItem = null;
         public bool IsIdle => currentState == AGVState.Idle;
+
+        [Header("Battery System (Fáze 21)")]
+        public Slider batterySlider; // Znázornění nad vozíkem (Zelená plnící se čára)
+        public float maxBattery = 100f;
+        public float currentBattery = 100f;
+        public float dischargeRate = 2f; // Ztráta % za sekundu při jízdě/nakládání
+        public float chargeRate = 15f; // Rychlost dobíjení v doku za sekundu
         
         // Dynamická paměť pro antikolizní systém (Kde se bude auto nacházet za milisekundu)
         public Vector2Int CurrentTargetNode { get; private set; } = new Vector2Int(-1, -1);
@@ -59,6 +67,32 @@ namespace WarehouseSim.Controllers
             if (_taskSystem != null && !_taskSystem.fleet.Contains(this))
             {
                 _taskSystem.fleet.Add(this);
+            }
+        }
+
+        private void Update()
+        {
+            // --- BAKALÁŘKA: FYZIKÁLNÍ SYSTÉM BATERIÍ ---
+            if (Time.timeScale > 0f)
+            {
+                if (currentState == AGVState.Charging && !_isMoving)
+                {
+                    // Nabíjíme se V DOKU (Auto fyzicky stojí)
+                    currentBattery += chargeRate * Time.deltaTime;
+                    if (currentBattery > maxBattery) currentBattery = maxBattery;
+                }
+                else if (currentState != AGVState.Idle)
+                {
+                    // Extrémně tvrdá práce (Cesta k Pickupu, k Dropoffu, NEBO CESTA DO DOKU)
+                    currentBattery -= dischargeRate * Time.deltaTime;
+                    if (currentBattery < 0f) currentBattery = 0f;
+                }
+
+                // Vizuální propojení na ProgressBar nad autem (Z pohledu 0.0 až 1.0)
+                if (batterySlider != null)
+                {
+                    batterySlider.value = currentBattery / maxBattery;
+                }
             }
         }
 
@@ -243,7 +277,7 @@ namespace WarehouseSim.Controllers
                             
                             if (newPath != null && newPath.Count > 0)
                             {
-                                Debug.Log($"[AGV Deadlock] Zablokováno u {nextGridPos}. Tvoříme Objížďku!");
+                                NotificationManager.LogInfo($"[AGV Deadlock] Zablokováno u {nextGridPos}. Tvoříme Objížďku!");
                                 _currentPath = newPath;
                                 _targetPathIndex = 0;
                                 _pathRecalculated = true;
@@ -325,6 +359,9 @@ namespace WarehouseSim.Controllers
 
         private void OnDrawGizmos()
         {
+            // Fáze 21: Vizuální skrytí drah parkujících/spících vozidel
+            if (currentState == AGVState.Charging) return;
+
             if (_currentPath != null && _currentPath.Count > 0)
             {
                 Gizmos.color = Color.cyan;

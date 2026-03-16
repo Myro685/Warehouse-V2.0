@@ -1,0 +1,19 @@
+Warehouse Simulation - Analytics Report
+Datum generovani;2026-03-16 16:54:18
+
+Pouziti algoritmus;AStar
+
+METRIKY VYSTUPU
+Celkova ujeta vzdalenost (m);1075,64
+Celkem doruceno krabic;0
+
+FLOTILA AGV
+Jmeno vozu;Zbyvajici Baterie %;Aktualni Stav
+AGV_1(Clone);26,7%;MovingToDropoff
+AGV_1(Clone);29,3%;MovingToDropoff
+AGV_1(Clone);32,1%;MovingToPickup
+AGV_1(Clone);33,0%;MovingToDropoff
+AGV_1(Clone);37,9%;MovingToDropoff
+AGV_1(Clone);36,2%;MovingToDropoff
+AGV_1(Clone);39,8%;MovingToDropoff
+AGV_1(Clone);40,6%;MovingToDropoff

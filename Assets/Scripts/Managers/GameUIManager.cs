@@ -153,5 +153,17 @@ namespace WarehouseSim.UI
                 taskSystem.stressTestInterval = Mathf.Max(0.2f, interval);
             }
         }
+        // ==========================================
+        // DATOVÁ ANALYTIKA (Fáze 21)
+        // ==========================================
+        public void BtnAction_ExportReport()
+        {
+            if (AnalyticsManager.Instance != null)
+            {
+                AnalyticsManager.Instance.ExportToCSV();
+                // Lehké vizuální potvrzení přímo to textu analytiky na ploše
+                if (txtAnalytics != null) txtAnalytics.text += "\n<color=green>✓ Export Uložen do složky Hry (.csv)</color>";
+            }
+        }
     }
 }
