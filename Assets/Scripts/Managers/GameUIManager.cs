@@ -6,24 +6,24 @@ using TMPro;
 namespace WarehouseSim.UI
 {
     /// <summary>
-    /// Slouží jako bezpečný prostředník mezi 2D Canvasem (Tlačítky, Texty) 
-    /// a hlubokými 3D systémy skladu. Cílem je zrušit nutnost používat Inspector 
-    /// pro ovládání logistiky během spuštěné hry.
+    /// Řídící třída uživatelského rozhraní. Zprostředkovává obousměrnou komunikaci 
+    /// mezi interaktivními 2D prvky (Canvas) a backend systémy simulace.
+    /// Zajišťuje vizualizaci dat v reálném čase.
     /// </summary>
     public class GameUIManager : MonoBehaviour
     {
-        [Header("Systémy skladu (Backend)")]
+        [Header("Backend Systems")]
         public TaskSystem taskSystem;
         public PathfindingManager pathfindingManager;
         public RackManager rackManager;
 
-        [Header("UI Texty na Obrazovce (Frontend)")]
+        [Header("UI Dashboard Text")]
         public TextMeshProUGUI txtCapacity;
         public TextMeshProUGUI txtJobsInfo;
         public TextMeshProUGUI txtAlgorithmInfo;
-        public TextMeshProUGUI txtAnalytics; // Doplněno zpět
+        public TextMeshProUGUI txtAnalytics;
 
-        [Header("UI Tlačítka (Simulace)")]
+        [Header("UI Controls")]
         public Button btnPlay;
         public Button btnPause;
 
@@ -31,10 +31,8 @@ namespace WarehouseSim.UI
 
         private void Start()
         {
-            // Fáze 20: Každá hra začíná ve Stavebním módu (Čas se nehýbe, auta stojí)
             Time.timeScale = 0f;
             
-            // Výchozí vizuál tlačítek
             if (btnPlay != null) btnPlay.interactable = true;
             if (btnPause != null) btnPause.interactable = false; 
         }
@@ -45,7 +43,7 @@ namespace WarehouseSim.UI
         }
 
         /// <summary>
-        /// Čte živá data ze skladu a propisuje je do textů na obrazovce.
+        /// Agreguje živá data ze simulačních vrstev a synchronizuje je s textovými prvky rozhraní.
         /// </summary>
         private void RefreshDashboard()
         {
@@ -70,17 +68,17 @@ namespace WarehouseSim.UI
 
             if (pathfindingManager != null && txtAlgorithmInfo != null)
             {
-                txtAlgorithmInfo.text = $"Aktivní mozek tras: {pathfindingManager.activeAlgorithm}";
+                txtAlgorithmInfo.text = $"Aktivní trasovací algoritmus: {pathfindingManager.activeAlgorithm}";
             }
 
             if (AnalyticsManager.Instance != null && txtAnalytics != null)
             {
-                txtAnalytics.text = $"Ujeta vzdálenost: {Mathf.RoundToInt(AnalyticsManager.Instance.TotalDistanceTraveled)}m | Expedováno: {AnalyticsManager.Instance.TotalItemsDelivered}";
+                txtAnalytics.text = $"Ujetá vzdálenost: {Mathf.RoundToInt(AnalyticsManager.Instance.TotalDistanceTraveled)} m | Expedováno: {AnalyticsManager.Instance.TotalItemsDelivered}";
             }
         }
 
         // ==========================================
-        // Tlačítka z plochy (voláno přes OnClick v Editoru)
+        // UI Action Handlers
         // ==========================================
 
         public void BtnAction_OrderInbound()
@@ -97,7 +95,6 @@ namespace WarehouseSim.UI
         {
             if (pathfindingManager != null)
             {
-                // Překlapávání mezi A* a Dijkstrou pouhým stiskem tlačítka
                 if (pathfindingManager.activeAlgorithm == PathfindingAlgorithm.AStar)
                     pathfindingManager.activeAlgorithm = PathfindingAlgorithm.Dijkstra;
                 else
@@ -106,63 +103,59 @@ namespace WarehouseSim.UI
         }
 
         // ==========================================
-        // Řízení Času Simulace a Zátěžáku (Fáze 20)
+        // Řízení času a zátěžových testů
         // ==========================================
 
         public void BtnAction_PlaySimulation()
         {
-            if (_currentSimulationSpeed <= 0f) _currentSimulationSpeed = 1f; // Failsafe
+            if (_currentSimulationSpeed <= 0f) _currentSimulationSpeed = 1f;
             Time.timeScale = _currentSimulationSpeed;
             
-            if (taskSystem != null) taskSystem.stressTestMixed = true; // Rozjetí objednávek!
+            if (taskSystem != null) taskSystem.stressTestMixed = true; 
             
-            if (btnPlay != null) btnPlay.interactable = false; // "Zamačkni se"
-            if (btnPause != null) btnPause.interactable = true; // "Rozsviť se"
+            if (btnPlay != null) btnPlay.interactable = false; 
+            if (btnPause != null) btnPause.interactable = true;
         }
 
         public void BtnAction_PauseSimulation()
         {
             Time.timeScale = 0f;
             
-            if (taskSystem != null) taskSystem.stressTestMixed = false; // Vypnutí objednávek
+            if (taskSystem != null) taskSystem.stressTestMixed = false; 
             
             if (btnPlay != null) btnPlay.interactable = true;
             if (btnPause != null) btnPause.interactable = false;
         }
 
-        // Pro Unity Slider: Hodnoty od 0.5 do 5.0 (Fast Forward)
         public void SliderAction_SetSimulationSpeed(float speed)
         {
-            // Pokud ti Slider projde až k nule, hra by se pauzla a zablokovala. Zafixujeme minimální rychlost na 0.1x!
             _currentSimulationSpeed = Mathf.Max(0.1f, speed);
             
-            // Pokud simulace zrovna běží, hned tu rychlost upraví
             if (Time.timeScale != 0f)
             {
                 Time.timeScale = _currentSimulationSpeed;
             }
         }
 
-        // Pro Unity Slider: Třeba 0.5 do 5 vteřin
         public void SliderAction_SetOrderInterval(float interval)
         {
             if (taskSystem != null)
             {
-                // Pokud Slider pošle nulu (0 vteřin), systém padne do infinite/zero-tick loopu a zamrzne! 
-                // Zafixujeme absolutně nejbrutálnější zátěžák haly matematicky natvrdo na 0.2 vteřiny (5 aut za vteřinu!).
                 taskSystem.stressTestInterval = Mathf.Max(0.2f, interval);
             }
         }
+
         // ==========================================
-        // DATOVÁ ANALYTIKA (Fáze 21)
+        // Datový Export
         // ==========================================
+        
         public void BtnAction_ExportReport()
         {
             if (AnalyticsManager.Instance != null)
             {
                 AnalyticsManager.Instance.ExportToCSV();
-                // Lehké vizuální potvrzení přímo to textu analytiky na ploše
-                if (txtAnalytics != null) txtAnalytics.text += "\n<color=green>✓ Export Uložen do složky Hry (.csv)</color>";
+                
+                if (txtAnalytics != null) txtAnalytics.text += "\n<color=green>✓ Export uložen ve standardu na disk (.csv)</color>";
             }
         }
     }

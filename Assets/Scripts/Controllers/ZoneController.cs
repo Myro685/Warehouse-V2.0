@@ -5,21 +5,17 @@ using WarehouseSim.Managers;
 namespace WarehouseSim.Controllers
 {
     /// <summary>
-    /// Logická oblast ležící na herní mapě zastupující dok / rampu. 
-    /// Může představovat Příjem (Kamiony s novým zbožím) i Výdej (Odesílání objednávek zákazníkům).
+    /// Logická deklarace specializované zóny na ploše simulace (Nakládací dok, Expediční rampa, atd.).
     /// </summary>
     public class ZoneController : MonoBehaviour
     {
         [Header("Zone Configuration")]
-        [Tooltip("Určuje logickou barvu a pathfinding vlastnost. Inbound (Zelená), Outbound (Červená).")]
         public NodeType zoneType = NodeType.InboundZone;
-        
-        [Tooltip("Kde v gridu má být rampe postavena? (X, Y)")]
         public Vector2Int gridPosition;
 
-        [Header("Runtime State")]
+        [Header("Runtime Operations")]
         [System.NonSerialized] 
-        public Item currentItem = null; // Pokud je null, zóna je prázdná a může přijmout kamion
+        public Item currentItem = null; 
 
         private void Awake()
         {
@@ -45,7 +41,6 @@ namespace WarehouseSim.Controllers
 
         private void Start()
         {
-            // Centrování modelu (procedurální zarovnání na milimetry dle gridu)
             GridManager gm = FindFirstObjectByType<GridManager>();
             if (gm != null)
             {
@@ -55,8 +50,6 @@ namespace WarehouseSim.Controllers
                     gridPosition.y * gm.gridConfig.nodeSize
                 );
                 
-                // Přepsání uzlu na PŘÍJEM/VÝDEJ v Pathfinding 2D síti. 
-                // Na rozdíl od Racků dáváme pozor na to, že AGV sem MŮŽE najet.
                 Node node = gm.GetNode(gridPosition.x, gridPosition.y);
                 if (node != null)
                 {

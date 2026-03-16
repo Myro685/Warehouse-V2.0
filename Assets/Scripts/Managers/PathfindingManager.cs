@@ -3,7 +3,6 @@ using System.Diagnostics;
 using UnityEngine;
 using WarehouseSim.Core;
 using WarehouseSim.Data;
-using Debug = UnityEngine.Debug;
 
 namespace WarehouseSim.Managers
 {
@@ -14,8 +13,9 @@ namespace WarehouseSim.Managers
     }
 
     /// <summary>
-    /// Komunikuje s GridManagerem, volá algoritmy a měří jejich výkon,
-    /// což se hodí jako zdroj dat a statistik do bakalářské práce.
+    /// Správce navigačních algoritmů. Provádí proxy volání pro abstraktní algoritmy 
+    /// na poskytnuté datové mřížce. Aplikuje dynamické vážení uzlů pro řešení hustoty provozu.
+    /// Zdrojem pro záchyt a sběr statistických analytik výkonu (Ticks).
     /// </summary>
     public class PathfindingManager : MonoBehaviour
     {
@@ -35,13 +35,17 @@ namespace WarehouseSim.Managers
         }
 
         /// <summary>
-        /// Vyhledá cestu a změří čas běhu algoritmu.
+        /// Vyhledává trasu mezi dvěma souřadnicemi pomocí zvoleného algoritmu.
+        /// Aplikuje heuristiku vyhýbání se obsazeným koridorům.
         /// </summary>
+        /// <param name="startCoords">Počáteční pozice na mřížce.</param>
+        /// <param name="targetCoords">Cílová pozice na mřížce.</param>
+        /// <returns>Kolekce uzlů definujících platnou trasu, případně default.</returns>
         public List<Node> RequestPath(Vector2Int startCoords, Vector2Int targetCoords)
         {
             if (gridManager == null || gridManager.Grid == null)
             {
-                Debug.LogError("PathfindingManager: GridManager není dostupný nebo Grid není inicializován!");
+                NotificationManager.LogError("Závažná chyba: GridManager není dostupný nebo Grid není inicializován.");
                 return null;
             }
 
@@ -50,21 +54,19 @@ namespace WarehouseSim.Managers
 
             if (startNode == null || targetNode == null)
             {
-                Debug.LogWarning("PathfindingManager: Neplatný start nebo cíl pro Pathfinding!");
+                NotificationManager.LogWarning("Varování: Neplatný start nebo cíl pro kalkulaci trasy.");
                 return null;
             }
 
-            // DŮLEŽITÉ: Před každým hledáním vyčistíme staré G a H hodnoty paměti v Gridu.
             ResetGridCosts();
 
-            // PŘIDÁNÍ DYNAMICKÝCH ZÁCP (Traffic Congestion Data) 
-            // - abychom zabránili Včelímu Roji, kdy všechny AGV jedou po identické nejrychlejší pixeli
+            // Aplikace vah kontextuálních překážek do Flow-Control systému.
+            // Zabraňuje jevu lokálních shluků propisováním soft-penalizací pro sousední trasy.
             var taskSystem = FindFirstObjectByType<TaskSystem>();
             if (taskSystem != null)
             {
                 foreach (var agv in taskSystem.fleet)
                 {
-                    // Propíšeme těžkou penalizaci hmoty pod aktuálním i plánovaným umístěním každého auta
                     int curX = Mathf.RoundToInt(agv.transform.position.x / gridManager.gridConfig.nodeSize);
                     int curY = Mathf.RoundToInt(agv.transform.position.z / gridManager.gridConfig.nodeSize);
                     
@@ -83,7 +85,7 @@ namespace WarehouseSim.Managers
                     }
                     if (agv.FinalTargetNode.x != -1)
                     {
-                        // Extrémní penalta na místo, kde auto finálně bude manipulovat zbožím. Cizí auto si tak na 99 % najde jinou hranu regálu!
+                        // Propis zvýšené váhy pro obsluhující sekci regálů
                         Node n4 = gridManager.GetNode(agv.FinalTargetNode.x, agv.FinalTargetNode.y);
                         if (n4 != null) n4.TemporaryPenalty += 500;
                     }
@@ -92,18 +94,21 @@ namespace WarehouseSim.Managers
 
             IPathfinder pathfinder = activeAlgorithm == PathfindingAlgorithm.AStar ? _aStar : _dijkstra;
 
-            // Stopky (C# knihovna Diagnostics) pro měření času do obhajoby
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
             List<Node> path = pathfinder.FindPath(startNode, targetNode, gridManager.Grid);
 
             sw.Stop();
-            Debug.Log($"[{activeAlgorithm}] Cesta nalezena. Ticks: {sw.ElapsedTicks}. Počet kroků trasy: {path.Count}");
+            // Analytický log přeskočen pro běžné notifikace, tiskne se do skryté konzole.
+            UnityEngine.Debug.Log($"[{activeAlgorithm}] Cesta nalezena. Ticks: {sw.ElapsedTicks}. Počet kroků trasy: {path?.Count ?? 0}");
 
             return path;
         }
 
+        /// <summary>
+        /// Invalidační rutina. Nuluje heuristické a navigační parametry (G, H) sítě uzlů.
+        /// </summary>
         private void ResetGridCosts()
         {
             int w = gridManager.Grid.GetLength(0);

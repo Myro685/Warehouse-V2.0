@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.EventSystems; // Důležité pro blokování kliků za UI!
+using UnityEngine.EventSystems;
 using WarehouseSim.Data;
 using WarehouseSim.Managers;
 
@@ -8,32 +8,36 @@ namespace WarehouseSim.Controllers
 {
     public enum BuildTool { Rack, Wall, Inbound, Outbound, Resting, AGV, Remove }
 
+    /// <summary>
+    /// Stavební editor simulace. Spravuje vizuální umisťování prefabrikátů infrastruktury 
+    /// a AGV vozidel prostřednictvím paprskového castingu (Raycast). Všechny zásahy do 
+    /// sítě jsou synchronizovány s instancí GridManager.
+    /// </summary>
     public class BuildManager : MonoBehaviour
     {
         [Header("References")]
         public GridManager gridManager;
         
-        [Header("Zdroje k postavení (Ze složky Prefabs)")]
+        [Header("Prefabs Resource Binding")]
         public GameObject rackPrefab;
         public GameObject wallPrefab;
         public GameObject inboundPrefab;
         public GameObject outboundPrefab;
-        public GameObject restingPrefab; // Přidáno pro Parkovací doky
+        public GameObject restingPrefab; 
         public GameObject agvPrefab;
 
-        [Header("Aktuální nástroj v ruce")]
+        [Header("State")]
         public BuildTool currentTool = BuildTool.Rack;
 
         private void Update()
         {
             if (Mouse.current == null) return;
 
-            // Klíčová oprava! 
-            // Kdykoliv máš myš nad Texty, Canvasem nebo Tlačítky, nesmíme propálit laser dolů a stavět kostku!
+            // Ochrana proti propadávání stisku skrze prvky uživatelského rozhraní (Canvas/UI Layer)
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
                 return;
 
-            // Fáze 20: Editor haly (Buldozer, Regály) funguje pouze ve zmraženém čase (Pause)
+            // Manipulace s prostředím je povolena pouze v editačním režimu (pozastavený logistický časovač)
             if (Time.timeScale != 0f) 
                 return;
 
@@ -46,8 +50,9 @@ namespace WarehouseSim.Controllers
             }
         }
 
-        // Tvoje hlavní kamera ve scéně asi nemá nativní Unity Tag "MainCamera", takže to hazelo "Object reference not set". 
-        // Tento Fallback kód ji najde vždy ať má štítek jakýkoliv:
+        /// <summary>
+        /// Vyhledává aktivní instanční kameru napříč dostupnými tagy a objekty scény.
+        /// </summary>
         private Camera GetCamera()
         {
             if (Camera.main != null) return Camera.main;
@@ -55,7 +60,7 @@ namespace WarehouseSim.Controllers
             Camera anyCam = FindFirstObjectByType<Camera>();
             if (anyCam != null) return anyCam;
 
-            Debug.LogError("[BuildManager] Ve scéně není vůbec žádná GameObject Kamera!");
+            NotificationManager.LogError("Chyba Render Pipeline: Nebyla nalezena žádná Camera složka ve scéně.");
             return null;
         }
 
@@ -66,19 +71,19 @@ namespace WarehouseSim.Controllers
             if (gridPos.x < 0 || gridPos.y < 0 || gridPos.x >= gridManager.gridConfig.gridX || gridPos.y >= gridManager.gridConfig.gridY) 
                 return; 
 
-            int width = currentTool == BuildTool.Rack ? 4 : 1; // Nový Asset Store regál je velký přes 4 bloky!
+            int width = currentTool == BuildTool.Rack ? 4 : 1; 
             
-            // Kontrola volného místa pro všechny bloky nového velko-objektu
+            // Validace prostorové volnosti pro vícerozměrné subjekty před zahájením inicializace
             if (currentTool != BuildTool.AGV)
             {
                 for (int i = 0; i < width; i++)
                 {
-                    if (gridPos.x + i >= gridManager.gridConfig.gridX) return; // Jsem okrajem mapy venku!
+                    if (gridPos.x + i >= gridManager.gridConfig.gridX) return;
                     
                     Node n = gridManager.GetNode(gridPos.x + i, gridPos.y);
                     if (n == null || n.Type != NodeType.Empty)
                     {
-                        Debug.LogWarning("Builder: Nedostatek místa pro celou šířku obřího regálu.");
+                        NotificationManager.LogWarning("Zamítnuto: Kolidující infrastruktura v požadovaném vkládacím prostoru.");
                         return;
                     }
                 }
@@ -100,7 +105,6 @@ namespace WarehouseSim.Controllers
             
             if (prefabToSpawn != null)
             {
-                // Unikátní vynesení výšky, AGV chceme postavit shora nad dlaždici
                 float heightOffset = currentTool == BuildTool.AGV ? 0.3f : 0f;
                 Vector3 spawnPos = new Vector3(worldPos.x, worldPos.y + heightOffset, worldPos.z);
                 
@@ -110,9 +114,9 @@ namespace WarehouseSim.Controllers
                 
                 if (currentTool == BuildTool.Rack) 
                 {
-                    rootNode.Type = NodeType.Rack; // Mozek regálu na první (levé) buňce
+                    rootNode.Type = NodeType.Rack; 
                     
-                    // Bezpečnostně neprodyšně zavřeme zbylé 3 buňky pod modelem
+                    // Asignace blokátorů obsazenosti pro zamezení průjezdu pod 3D modelem
                     for (int i = 1; i < 4; i++) 
                     {
                         Node partNode = gridManager.GetNode(gridPos.x + i, gridPos.y);
@@ -120,7 +124,6 @@ namespace WarehouseSim.Controllers
                     }
                 }
                 
-                // Ujištění, že si myší postavený objekt nebude myslet že je na souřadnicích 0,0
                 ZoneController zc = newObj.GetComponent<ZoneController>();
                 if (zc != null) zc.gridPosition = gridPos;
 
@@ -137,7 +140,7 @@ namespace WarehouseSim.Controllers
             Camera cam = GetCamera();
             if (cam == null) return;
 
-            // Zkusíme najít objekt primárně přes fyziku (kvůli přesnosti kliknutí na model)
+            // Fáze 1: Metoda fyzikální identifikace
             Ray ray = cam.ScreenPointToRay(Mouse.current.position.ReadValue());
             if (Physics.Raycast(ray, out RaycastHit hit))
             {
@@ -155,16 +158,14 @@ namespace WarehouseSim.Controllers
                 {
                     nodePhysics.Type = NodeType.Empty;
                     Destroy(hit.collider.gameObject);
-                    return; // Zastavit, abychom nešli do fallbacku, protože zdi se mažou čistě přes raycast
+                    return; 
                 }
             }
 
-            // POKUD FYZIKA SELHALA (Např. Regál a AGV nemají 3D Collider, klikli jsme "skrz" ně přímo na zem Gridu),
-            // použijeme matematické vyhledávání pole z GridManageru!
+            // Fáze 2: Analytická iterace skrze grid pro entity bez fyzikálních kolizí
             Vector2Int pos = GetMouseGridPosition();
             if (pos.x < 0 || pos.y < 0) return;
 
-            // A) Hledáme AGV
             foreach (var a in FindObjectsByType<AGVController>(FindObjectsSortMode.None))
             {
                 int agvX = Mathf.RoundToInt(a.transform.position.x / gridManager.gridConfig.nodeSize);
@@ -172,7 +173,6 @@ namespace WarehouseSim.Controllers
                 if (agvX == pos.x && agvY == pos.y) { RemoveAGV(a); return; }
             }
 
-            // B) Hledáme obří Regál (šířka 4 bloky)
             foreach (var r in FindObjectsByType<RackController>(FindObjectsSortMode.None))
             {
                 for (int i = 0; i < 4; i++)
@@ -181,7 +181,6 @@ namespace WarehouseSim.Controllers
                 }
             }
 
-            // C) Hledáme Zónu
             foreach (var z in FindObjectsByType<ZoneController>(FindObjectsSortMode.None))
             {
                 if (z.gridPosition.x == pos.x && z.gridPosition.y == pos.y) { RemoveZone(z); return; }
@@ -208,7 +207,6 @@ namespace WarehouseSim.Controllers
 
         private void RemoveAGV(AGVController agv)
         {
-            // O odstranění z flotil se postará událost OnDestroy() uvnitř AGVControlleru
             Destroy(agv.gameObject);
         }
 

@@ -5,9 +5,9 @@ using WarehouseSim.Data;
 namespace WarehouseSim.Core
 {
     /// <summary>
-    /// A* algoritmus používá k hledání cíle heuristiku (H-Cost).
-    /// Díky tomu je mnohem rychlejší a zkoumá menší počet uzlů než Dijkstra,
-    /// plynule tak míří směrem k cíli.
+    /// Implementace algoritmu A* (A-Star) pro hledání nejkratší cesty na mřížce.
+    /// Využívá heuristiku (H-Cost) pro směrové upřednostnění uzlů, čímž minimalizuje
+    /// počet iterativně prohledávaných stavů oproti Dijkstrově algoritmu.
     /// </summary>
     public class AStarPathfinder : IPathfinder
     {
@@ -23,7 +23,6 @@ namespace WarehouseSim.Core
             {
                 Node currentNode = openSet[0];
                 
-                // Najdeme uzel s nejmenším FCost (případně HCost při shodě) v seznamu ke zpracování
                 for (int i = 1; i < openSet.Count; i++)
                 {
                     if (openSet[i].FCost < currentNode.FCost || 
@@ -36,20 +35,17 @@ namespace WarehouseSim.Core
                 openSet.Remove(currentNode);
                 closedSet.Add(currentNode);
 
-                // Našli jsme cíl
                 if (currentNode == targetNode)
                 {
                     return RetracePath(startNode, targetNode);
                 }
 
-                // Projdeme sousedy (nahoru, dolů, vlevo, vpravo - bez diagonál vzhledem k regálům)
                 foreach (Node neighbour in GetNeighbours(currentNode, grid))
                 {
                     if (!neighbour.IsWalkable || closedSet.Contains(neighbour)) continue;
 
-                    // A* Cost = 10 (rovně)
                     int staticPenalty = 0;
-                    if (neighbour.Type == NodeType.RestingZone) staticPenalty = 50; // Auta nebudou projíždět skrz parkovací místa, unless it's their final target
+                    if (neighbour.Type == NodeType.RestingZone) staticPenalty = 50; 
                     else if (neighbour.Type == NodeType.InboundZone || neighbour.Type == NodeType.OutboundZone) staticPenalty = 30;
                     
                     int moveCost = currentNode.GCost + 10 + staticPenalty + neighbour.TemporaryPenalty;
@@ -68,10 +64,12 @@ namespace WarehouseSim.Core
                 }
             }
 
-            // Cesta nenalezena (např. zcela zablokováno překážkami)
             return new List<Node>();
         }
 
+        /// <summary>
+        /// Zpětná rekonstrukce finální dráhy přes prekurzorové vazby.
+        /// </summary>
         private List<Node> RetracePath(Node startNode, Node endNode)
         {
             List<Node> path = new List<Node>();
@@ -82,14 +80,16 @@ namespace WarehouseSim.Core
                 path.Add(currentNode);
                 currentNode = currentNode.Parent;
             }
-            // Získáme cestu ze startu do cíle otočením
+            
             path.Reverse();
             return path;
         }
 
+        /// <summary>
+        /// Výpočet Manhattan distance, adekvátní pro čtvercový grid bez asymetrických úhlopříček.
+        /// </summary>
         private int GetDistance(Node nodeA, Node nodeB)
         {
-            // Manhattan distance (pro pravoúhlý grid bez diagonál)
             int dstX = Mathf.Abs(nodeA.GridX - nodeB.GridX);
             int dstY = Mathf.Abs(nodeA.GridY - nodeB.GridY);
             return 10 * (dstX + dstY);
@@ -101,13 +101,9 @@ namespace WarehouseSim.Core
             int width = grid.GetLength(0);
             int height = grid.GetLength(1);
 
-            // Nahoru
             if (node.GridY + 1 < height) neighbours.Add(grid[node.GridX, node.GridY + 1]);
-            // Dolů
             if (node.GridY - 1 >= 0) neighbours.Add(grid[node.GridX, node.GridY - 1]);
-            // Vpravo
             if (node.GridX + 1 < width) neighbours.Add(grid[node.GridX + 1, node.GridY]);
-            // Vlevo
             if (node.GridX - 1 >= 0) neighbours.Add(grid[node.GridX - 1, node.GridY]);
 
             return neighbours;

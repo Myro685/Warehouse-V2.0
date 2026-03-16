@@ -5,9 +5,9 @@ using WarehouseSim.Data;
 namespace WarehouseSim.Core
 {
     /// <summary>
-    /// Dijkstra algoritmus nezná vzdálenost k cíli (heuristiku).
-    /// Prohledává prostor rovnoměrně na všechny strany, dokud na cíl nenarazí.
-    /// Vrací vždy nejkratší cestu, ale za cenu vyššího výpočetního výkonu a prohledaných buněk než A*.
+    /// Implementace Dijkstrova algoritmu pro hledání nejkratší cesty.
+    /// Abstrahuje heuristiku cíle a expanduje kruhově do dosažení cílového uzlu.
+    /// Poskytuje absolutní garanci nalození optimální cesty na úkor expanze stavového prostoru.
     /// </summary>
     public class DijkstraPathfinder : IPathfinder
     {
@@ -23,7 +23,6 @@ namespace WarehouseSim.Core
             {
                 Node currentNode = openSet[0];
                 
-                // Dijkstra hledí pouze na GCost (vzdálenost od startu), nemá HCost
                 for (int i = 1; i < openSet.Count; i++)
                 {
                     if (openSet[i].GCost < currentNode.GCost)
@@ -53,7 +52,6 @@ namespace WarehouseSim.Core
                     if (moveCost < neighbour.GCost || !openSet.Contains(neighbour))
                     {
                         neighbour.GCost = moveCost;
-                        // Dijkstra vůbec nepoužívá heuristiku a H-Cost zůstává ignorována
                         neighbour.HCost = 0; 
                         neighbour.Parent = currentNode;
 
@@ -68,6 +66,9 @@ namespace WarehouseSim.Core
             return new List<Node>();
         }
 
+        /// <summary>
+        /// Zpětná rekonstrukce finální dráhy přes prekurzorové vazby.
+        /// </summary>
         private List<Node> RetracePath(Node startNode, Node endNode)
         {
             List<Node> path = new List<Node>();
@@ -78,6 +79,7 @@ namespace WarehouseSim.Core
                 path.Add(currentNode);
                 currentNode = currentNode.Parent;
             }
+            
             path.Reverse();
             return path;
         }

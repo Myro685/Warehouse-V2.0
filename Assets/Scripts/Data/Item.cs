@@ -1,9 +1,9 @@
 namespace WarehouseSim.Data
 {
     /// <summary>
-    /// Reprezentuje fyzické zboží, krabici nebo paletu.
-    /// Je to čistá datová třída (bez MonoBehaviour). Díky tomu může 
-    /// sklad obsahovat tisíce těchto instancí v paměti zcela bez zasekávání.
+    /// Reprezentuje fyzickou přepravní jednotku (zboží, krabici, paletu) uvnitř simulace.
+    /// Koncipováno jako striktní datová třída bez závislosti na MonoBehaviour,
+    /// což umožňuje paměťově nenáročné instancování tisíců položek v reálném čase.
     /// </summary>
     [System.Serializable]
     public class Item
@@ -12,7 +12,7 @@ namespace WarehouseSim.Data
         public string Name { get; private set; }
         public float Weight { get; private set; }
         
-        // Fyzická manifestace zboží ve skladu (ukazujeme na skutečný Clone z Prefabu)
+        /// <summary> Volitelná reference zprostředkovávající vazbu na konkrétní 3D grafický prefabrikát ve scéně. </summary>
         public UnityEngine.GameObject VisualModel { get; set; }
 
         public Item(string id, string name, float weight)

@@ -3,9 +3,9 @@ using UnityEngine;
 namespace WarehouseSim.Managers
 {
     /// <summary>
-    /// Slouží jako centrální sběrna dat z celého logistického řetězce.
-    /// Perfektní podklad pro bakalářskou obhajobu, dokazuje že algoritmy
-    /// reálně šetří ujetou vzdálenost a čas. Dále obsahuje procedurální vizualizaci barevné heatmapy.
+    /// Centrální sběrna dat z logistického řetězce. Agreguje relevantní metriky, 
+    /// jako je efektivita trasy nebo výkonnost algoritmů, za účelem statistického prokazování.
+    /// Integruje systém procedurální vizualizace teplotní mapy (Heatmap).
     /// </summary>
     public class AnalyticsManager : MonoBehaviour
     {
@@ -14,11 +14,10 @@ namespace WarehouseSim.Managers
         public float TotalDistanceTraveled { get; private set; }
         public int TotalItemsDelivered { get; private set; }
         
-        // Data pro heatmapu
         private int[,] _heatmapData;
         private int _maxVisits = 1;
 
-        [Header("Heatmap Vizuál")]
+        [Header("Heatmap Visualization")]
         private GameObject _heatmapContainer;
         private MeshRenderer[,] _heatmapRenderers;
         public bool isHeatmapVisible = false;
@@ -45,7 +44,7 @@ namespace WarehouseSim.Managers
         }
 
         // ==========================================
-        // TVORBA A AKTUALIZACE HEATMAPY (EVENT DRIVEN OPTIMALIZACE!)
+        // Procedurální Heatmapa (Event-Driven Optimalizace)
         // ==========================================
         
         public void RegisterNodeVisited(int x, int y)
@@ -61,9 +60,6 @@ namespace WarehouseSim.Managers
             {
                 _heatmapData[x, y]++;
                 
-                // EVENT-DRIVEN přístup:
-                // Abchom nepočítali poměry barev v updatu 60x za vteřinu a neničili výkon CPU,
-                // aktualizujeme barvy pouze exaktně, když dojde k návštěvě (našlapu) uzlu!
                 bool newMax = false;
                 if (_heatmapData[x, y] > _maxVisits)
                 {
@@ -73,8 +69,6 @@ namespace WarehouseSim.Managers
 
                 if (isHeatmapVisible && _heatmapRenderers != null)
                 {
-                    // Pokud je prolomen rekord a je nová maximalní hodnota, musí se matematicky 
-                    // překreslit celé plátno v poměru vůči novému The Best číslu, jinak stačí 1 pixel!
                     if (newMax) RefreshAllHeatmapTiles();
                     else RefreshSingleTile(x, y);
                 }
@@ -89,7 +83,7 @@ namespace WarehouseSim.Managers
             {
                 if (_heatmapContainer == null) CreateHeatmapGrid();
                 _heatmapContainer.SetActive(true);
-                RefreshAllHeatmapTiles(); // Nutno vykreslit dosavadní historii při zapnutí
+                RefreshAllHeatmapTiles(); 
             }
             else
             {
@@ -109,7 +103,6 @@ namespace WarehouseSim.Managers
             _heatmapContainer = new GameObject("HeatmapContainer");
             _heatmapRenderers = new MeshRenderer[xSize, ySize];
 
-            // Default Sprite shader žere průhlednost nativně z Color structury a nepodléhá stínům
             Shader shader = Shader.Find("Sprites/Default");
 
             for (int x = 0; x < xSize; x++)
@@ -120,18 +113,17 @@ namespace WarehouseSim.Managers
                     quad.transform.SetParent(_heatmapContainer.transform);
                     
                     Vector3 pos = gm.GetNode(x, y).GetWorldPosition(nodeSize);
-                    pos.y = 0.15f; // Těsně nad zemí, aby to blikalo nad zónami
+                    pos.y = 0.15f; 
                     
                     quad.transform.position = pos;
-                    quad.transform.rotation = Quaternion.Euler(90, 0, 0); // Položíme jako dlažbu na podlahu
-                    quad.transform.localScale = new Vector3(nodeSize * 0.95f, nodeSize * 0.95f, 1f); // 5% díry dodají pixel art efekt
+                    quad.transform.rotation = Quaternion.Euler(90, 0, 0); 
+                    quad.transform.localScale = new Vector3(nodeSize * 0.95f, nodeSize * 0.95f, 1f); 
 
-                    // Kolize nejsou nutné, žraly by strašně moc fyziky
                     Destroy(quad.GetComponent<Collider>());
 
                     MeshRenderer mr = quad.GetComponent<MeshRenderer>();
                     mr.material = new Material(shader);
-                    mr.material.color = new Color(0, 0, 0, 0); // Inicializace na 100% průhledné ticho
+                    mr.material.color = new Color(0, 0, 0, 0); 
                     
                     _heatmapRenderers[x, y] = mr;
                 }
@@ -158,11 +150,10 @@ namespace WarehouseSim.Managers
             }
             else
             {
-                // Čím blíž k maxVisits, tím víc 1.0. Tím se posouvá Lerp ze Zelené do Červené!
                 float ratio = (float)visits / _maxVisits;
                 Color col = Color.Lerp(Color.green, Color.red, ratio);
                 
-                col.a = 0.5f; // Mírná průhlednost (50%) aby pres to byly hezky vidět grid čáry a AGVčka
+                col.a = 0.5f; 
                 _heatmapRenderers[x, y].material.color = col;
             }
         }
@@ -175,35 +166,35 @@ namespace WarehouseSim.Managers
         }
 
         // ==========================================
-        // DATOVÝ EXPORT (Fáze 21 - Bakalářka)
+        // Tvorba datového reportu
         // ==========================================
+        
+        /// <summary>
+        /// Agreguje veškeré KPI simulace a zapisuje strukturovaný CSV soubor 
+        /// na lokální systém běžícího projektu do jeho kořenového adresáře.
+        /// </summary>
         public void ExportToCSV()
         {
-            // Složka nad vrstvou Assets (Root složka celého Unity Projektu), aby se to hráčům dobře hledalo
             string folderPath = Application.dataPath + "/../"; 
             string fileName = "Warehouse_Report_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv";
             string fullPath = System.IO.Path.Combine(folderPath, fileName);
 
             System.Text.StringBuilder csv = new System.Text.StringBuilder();
             
-            // Hlavička dokumentu (Používáme středník, protože evrospký Excel čárky nebere jako oddělovač buněk)
             csv.AppendLine("Warehouse Simulation - Analytics Report");
             csv.AppendLine("Datum generovani;" + System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             csv.AppendLine("");
 
-            // Záznam o použitém Pathfindingu
             PathfindingManager pm = FindFirstObjectByType<PathfindingManager>();
             string algo = (pm != null) ? pm.activeAlgorithm.ToString() : "Neznamy";
             csv.AppendLine("Pouziti algoritmus;" + algo);
             csv.AppendLine("");
 
-            // Hlavní KPI Data
             csv.AppendLine("METRIKY VYSTUPU");
             csv.AppendLine("Celkova ujeta vzdalenost (m);" + TotalDistanceTraveled.ToString("F2"));
             csv.AppendLine("Celkem doruceno krabic;" + TotalItemsDelivered);
             csv.AppendLine("");
 
-            // Sekce flotily (Stavy Baterií!)
             TaskSystem ts = FindFirstObjectByType<TaskSystem>();
             if (ts != null && ts.fleet.Count > 0)
             {
@@ -218,11 +209,11 @@ namespace WarehouseSim.Managers
             try
             {
                 System.IO.File.WriteAllText(fullPath, csv.ToString());
-                NotificationManager.LogSuccess($"[Analytics] Bakalarsky CSV Report uspesne ulozen do: {fullPath}");
+                NotificationManager.LogSuccess($"[Analytics] Dokončeno. Report uložen do: {fullPath}");
             }
             catch (System.Exception e)
             {
-                NotificationManager.LogError($"[Analytics] Nepodarilo zapsat CSV Report na disk: {e.Message}");
+                NotificationManager.LogError($"[Analytics] Selhal pokus o zápis dat na disk: {e.Message}");
             }
         }
     }

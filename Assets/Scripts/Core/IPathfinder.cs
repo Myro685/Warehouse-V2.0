@@ -4,15 +4,19 @@ using WarehouseSim.Data;
 namespace WarehouseSim.Core
 {
     /// <summary>
-    /// Společné rozhraní pro všechny vyhledávací algoritmy.
-    /// Umožňuje snadné přepínání algoritmů (Dijkstra vs A*) v PathfindingManageru.
+    /// Společný kontrakt (rozhraní) pro implementaci mapových vyhledávacích algoritmů.
+    /// Umožňuje bezproblémové přepínání strategií (např. Dijsktra vs. A*) za běhu,
+    /// čímž demonstruje uplatnění návrhového vzoru Strategy (Strategy Pattern).
     /// </summary>
     public interface IPathfinder
     {
         /// <summary>
-        /// Najde nejkratší cestu z bodu A do bodu B na daném Gridu.
+        /// Vypočítá nejoptimálnější trasu mezi výchozím a cílovým uzlem na aktuálně předané logické síti.
         /// </summary>
-        /// <returns>Seznam uzlů tvořících cestu. Pokud cesta neexistuje, vrací prázdný list nebo null.</returns>
+        /// <param name="startNode">Počáteční uzel</param>
+        /// <param name="targetNode">Požadovaný cílový uzel</param>
+        /// <param name="grid">Dvourozměrné pole reprezentující aktuální mapu sítě</param>
+        /// <returns>Sekvenční seznam uzlů tvořících souvislou cestu, případně null při selhání navigace.</returns>
         List<Node> FindPath(Node startNode, Node targetNode, Node[,] grid);
     }
 }

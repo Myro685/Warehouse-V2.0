@@ -1,17 +1,30 @@
 namespace WarehouseSim.Data
 {
     /// <summary>
-    /// Definuje typy buněk, ze kterých se skládá náš 2D Grid skladu.
-    /// Pomáhá pro pathfinding algoritmy a herní logiku.
+    /// Enumerativní identifikátory logických typů buněk 2D Gridu.
+    /// Určují kolizní sémantiku navigačních algoritmů a chování manipulační techniky.
     /// </summary>
     public enum NodeType
     {
-        Empty,          // Volná cesta (AGV může projet)
-        Wall,           // Neprostupná zeď (pevná překážka)
-        Rack,           // Regál se zbožím (AGV sem nevjede, ale obsluhuje ze sousední buňky)
-        InboundZone,    // Příjem (místo, kde se objevuje nové zboží k naskladnění)
-        OutboundZone,   // Výdej (expedice, sem AGV vozí věci z regálů pro objednávky)
-        RestingZone,    // Odpočinková a nabíjecí zóna pro volné vozíky
-        RackPart        // Ochranná zóna pro dlouhé 4-blokové regály z Asset Storu
+        /// <summary> Průchozí komunikace volná pro pojezd AGV. </summary>
+        Empty,          
+        
+        /// <summary> Statická překážka neprostupná pro jakoukoliv entitu. </summary>
+        Wall,           
+        
+        /// <summary> Alokovaný regál. AGV neprojíždí skrz, ale obsluhuje jej z přilehlého uzlu. </summary>
+        Rack,           
+        
+        /// <summary> Zóna pro naskladňování (Inbound) externího materiálu. </summary>
+        InboundZone,    
+        
+        /// <summary> Zóna expedičního výdeje (Outbound) pro expedici zákazníkům. </summary>
+        OutboundZone,   
+        
+        /// <summary> Dedikovaná plocha pro nabíjení a vyčkávání nečinných vozidel flotily. </summary>
+        RestingZone,    
+        
+        /// <summary> Rezervovaná kolizní bariéra ukrytá pod modely rozměrných regálů. </summary>
+        RackPart        
     }
 }

@@ -6,23 +6,22 @@ using WarehouseSim.Data;
 namespace WarehouseSim.Managers
 {
     /// <summary>
-    /// Globální "katalog" nad všemi regály. Ví o každém RackControlleru ve scéně,
-    /// a dokáže řídícím systémům rychle najít volný regál s kapacity pro nové palety.
+    /// Centrální registr všech alokovaných regálových prostor v simulaci.
+    /// Zajišťuje O(1) referenční přístup pro dispečerské algoritmy hledající dostupné skladovací kapacity.
     /// </summary>
     public class RackManager : MonoBehaviour
     {
-        [Header("References")]
+        [Header("System References")]
         public GridManager gridManager;
 
-        // Již nezadáváme souřadnice krkolomně ručně! Tento list se vyplní zcela automaticky,
-        // protože každý fyzický vytvořený RackController se sem na startu sám nahlásí.
         [Header("Runtime State")]
         [SerializeField] private List<RackController> _activeRacks = new List<RackController>();
 
         public List<RackController> AllRacks => _activeRacks;
 
         /// <summary>
-        /// Tato funkce je volána z RackControlleru jako součást samo-nastavovacího enginu.
+        /// Zprostředkovává Inversion of Control chování. Nová entita sama deklaruje 
+        /// svou existenci globálnímu manažerovi a propíše svou přítomnost do navigační sítě.
         /// </summary>
         public void RegisterRack(RackController rack)
         {
@@ -30,7 +29,6 @@ namespace WarehouseSim.Managers
             {
                 _activeRacks.Add(rack);
                 
-                // Překlopíme naši buňku na PŘEKÁŽKU, aby o tom AStar a Dijkstra hned věděli!
                 Node node = gridManager.GetNode(rack.gridPosition.x, rack.gridPosition.y);
                 if (node != null)
                 {
@@ -39,18 +37,20 @@ namespace WarehouseSim.Managers
             }
         }
 
+        /// <summary>
+        /// Odebírá referenci na regálový systém ze seznamu platných úložných prostor.
+        /// Uvolnění logického gridu řeší příslušná destrukční rutina v BuildManageru.
+        /// </summary>
         public void UnregisterRack(RackController rack)
         {
             if (_activeRacks.Contains(rack))
             {
                 _activeRacks.Remove(rack);
-                // Poznámka: O re-změnu NodeType samotného pole v gridu se stará Buldozer v BuildManageru
             }
         }
 
         /// <summary>
-        /// Systém příjmu se nás takto naprogramovaně zeptá: "Kde ještě máš prázdno?"
-        /// (Používá LINQ framework k nalezení první vyhovující kostky)
+        /// Vyhledá pomocí LINQ metodiky první dostupný úložný prostor disponující volnou kapacitou.
         /// </summary>
         public RackController GetAvailableRackForStorage()
         {
