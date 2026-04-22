@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace WarehouseSim.Data
@@ -7,7 +8,7 @@ namespace WarehouseSim.Data
     /// Není odvozena od MonoBehaviour za účelem striktního oddělení dat, 
     /// čímž poskytuje O(1) přístupy do stavové paměti logického Gridu.
     /// </summary>
-    public class Node
+    public class Node : IComparable<Node>
     {
         // --- Identifikace prostoru ---
         public int GridX { get; private set; }
@@ -26,7 +27,7 @@ namespace WarehouseSim.Data
         /// <summary> Soft-kolidní modifikátor aplikovaný systémy pro řízení dopravy (Traffic Congestion). </summary>
         public int TemporaryPenalty { get; set; } = 0;
         
-        public int FCost => GCost + HCost + TemporaryPenalty; 
+        public int FCost => GCost + HCost; 
 
         public Node Parent { get; set; }
 
@@ -51,6 +52,16 @@ namespace WarehouseSim.Data
             HCost = 0;
             TemporaryPenalty = 0;
             Parent = null;
+        }
+
+        /// <summary>
+        /// Porovnávací metoda pro MinHeap. Řadí primárně dle FCost, sekundárně dle HCost.
+        /// </summary>
+        public int CompareTo(Node other)
+        {
+            int compare = FCost.CompareTo(other.FCost);
+            if (compare == 0) compare = HCost.CompareTo(other.HCost);
+            return compare;
         }
     }
 }

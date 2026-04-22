@@ -10,6 +10,8 @@ namespace WarehouseSim.Managers
     /// Centrální distribuční uzel. Alokuje logistické úlohy dostupné flotile AGV
     /// na základě stavových požadavků regálů a vstupních/výstupních zón.
     /// Zajišťuje datovou i fyzickou synchronizaci toku materiálu.
+    /// Pro účely benchmarkingu používá předgenerovanou frontu rozhodnutí,
+    /// čímž garantuje absolutní determinismus nezávislý na zvoleném algoritmu.
     /// </summary>
     public class TaskSystem : MonoBehaviour
     {
@@ -40,15 +42,55 @@ namespace WarehouseSim.Managers
         public float stressTestInterval = 1.5f;
         private float _stressTimer = 0f;
 
+        [Header("Bakalářské Měření a Determinismus")]
+        public bool useFixedSeed = true;
+        public int randomSeed = 42;
+        public int targetDeliveryCount = 50;
+        private bool _benchmarkFinished = false;
+
+        // Předgenerovaná deterministická fronta rozhodnutí (true = inbound, false = outbound)
+        private Queue<bool> _taskDecisionQueue = new Queue<bool>();
+        private int _itemIdCounter = 1000;
+
         private GridManager _gridManager;
 
         private void Awake()
         {
             _gridManager = FindFirstObjectByType<GridManager>();
+            
+            // Přiřazení unikátních AgvId pro priority-based symmetry breaking
+            for (int i = 0; i < fleet.Count; i++)
+            {
+                fleet[i].AgvId = i;
+            }
+            
+            if (useFixedSeed)
+            {
+                // Inicializace RNG a předgenerování celé sekvence rozhodnutí
+                Random.InitState(randomSeed);
+                
+                int totalDecisions = targetDeliveryCount * 5; // 5× rezerva
+                for (int i = 0; i < totalDecisions; i++)
+                {
+                    _taskDecisionQueue.Enqueue(Random.value > 0.4f);
+                }
+                
+                NotificationManager.LogInfo($"[Měření] Random Seed uzamčen: {randomSeed}. Pregenerováno {totalDecisions} rozhodnutí.");
+            }
         }
 
         private void Update()
         {
+            // Kontrola ukončení benchmarku
+            if (!_benchmarkFinished && AnalyticsManager.Instance != null && AnalyticsManager.Instance.TotalItemsDelivered >= targetDeliveryCount)
+            {
+                _benchmarkFinished = true;
+                Time.timeScale = 0f;
+                NotificationManager.LogSuccess($"[Měření] Benchmark dokončen! Dosaženo {targetDeliveryCount} doručení. Generuji report...");
+                AnalyticsManager.Instance.ExportToCSV();
+                return;
+            }
+
             if (triggerInboundDelivery)
             {
                 triggerInboundDelivery = false;
@@ -82,10 +124,23 @@ namespace WarehouseSim.Managers
                     }
                     else if (stressTestMixed)
                     {
-                        if (canStore && (!canSell || Random.value > 0.4f))
+                        // Deterministické rozhodování z předgenerované fronty
+                        bool preferInbound = true;
+                        if (useFixedSeed && _taskDecisionQueue.Count > 0)
+                        {
+                            preferInbound = _taskDecisionQueue.Dequeue();
+                        }
+                        else if (!useFixedSeed)
+                        {
+                            preferInbound = Random.value > 0.4f;
+                        }
+                        
+                        if (preferInbound && canStore)
                             CreateInboundTask();
                         else if (canSell)
                             CreateOutboundTask();
+                        else if (canStore)
+                            CreateInboundTask();
                     }
                 }
             }
@@ -95,7 +150,7 @@ namespace WarehouseSim.Managers
             {
                 foreach (var agv in fleet)
                 {
-                    if (agv.currentState == AGVState.Idle)
+                    if (agv.currentState == AGVState.Idle && agv.IdleTimer > 1.5f)
                     {
                         agv.currentState = AGVState.Charging; 
                         StartCoroutine(ParkAGVSequence(agv));
@@ -109,21 +164,18 @@ namespace WarehouseSim.Managers
             ZoneController parkZone = GetSmartFreeZone(restingZones, agv);
             if (parkZone == null) 
             {
-                agv.currentState = AGVState.Idle; // Vyčkáme na další dostupný volný slot
+                agv.currentState = AGVState.Idle;
                 yield break;
             }
             
             bool isReached = false;
             agv.MoveToAndNotify(parkZone.gridPosition, () => isReached = true);
             yield return new WaitUntil(() => isReached);
-            // Jednotka setrvává ve stavu Charging, dokud ji TaskSystem nealokuje jinam
         }
 
         /// <summary>
         /// Vyhledá navigačně volnou zónu, minimalizujíc potenciální kolize s probíhající flotilovou logikou.
         /// </summary>
-        /// <param name="zoneList">Kolekce skenovaných zón</param>
-        /// <param name="forAGV">Vozidlo, pro které je zóna alokována</param>
         private ZoneController GetSmartFreeZone(List<ZoneController> zoneList, AGVController forAGV)
         {
             ZoneController bestZone = null;
@@ -186,10 +238,8 @@ namespace WarehouseSim.Managers
                 return;
             }
             
-            // Virtuální zámek kapacity zabraňuje race conditions při paralelním zpracování vícero AGV
             targetRack.PendingIncomingItems++;
 
-            // AGV filtrace na základě energetických kapacit
             AGVController idleAGV = fleet.Find(a => 
                 (a.currentState == AGVState.Idle && a.currentBattery > 15f) || 
                 (a.currentState == AGVState.Charging && a.currentBattery >= 90f)
@@ -209,7 +259,9 @@ namespace WarehouseSim.Managers
                 return;
             }
 
-            Item newPallet = new Item("IN-" + Random.Range(1000, 9999), "Stavební/Skladový Blok", 250f);
+            // Deterministické sekvenční ID namísto Random.Range
+            string itemId = "IN-" + _itemIdCounter++;
+            Item newPallet = new Item(itemId, "Skladový Blok", 250f);
             
             if (itemPrefab != null)
             {
@@ -233,7 +285,6 @@ namespace WarehouseSim.Managers
             agv.LoadItem(cargo);
             pickupZone.currentItem = null; 
             
-            // Relokace vizuálního reprezentantu k instanci vozidla
             if (cargo.VisualModel != null)
             {
                 cargo.VisualModel.transform.SetParent(agv.transform);
@@ -252,7 +303,6 @@ namespace WarehouseSim.Managers
             dropoffRack.PendingIncomingItems--; 
             dropoffRack.StoreItem(cargo); 
             
-            // Uložení vizuálního reprezentantu v uzlu regálu
             if (cargo.VisualModel != null)
             {
                 Transform slot = dropoffRack.GetNextVisualSlot();
@@ -265,7 +315,7 @@ namespace WarehouseSim.Managers
                 else
                 {
                     cargo.VisualModel.transform.SetParent(dropoffRack.transform);
-                    cargo.VisualModel.transform.localPosition = new Vector3(0, Random.Range(0.2f, 1.8f), 0);
+                    cargo.VisualModel.transform.localPosition = new Vector3(0, 0.5f, 0);
                 }
             }
 
@@ -324,7 +374,6 @@ namespace WarehouseSim.Managers
 
             if (pickupRack.IsEmpty)
             {
-                // Výjimka simulující datový defekt či souběžnou mutaci logiky regálu, AGV neprovede žádnou fyzickou operaci.
                 NotificationManager.LogWarning($"Objekt {pickupRack.gridPosition} invalidován během přesunu.");
                 pickupRack.PendingOutgoingItems--; 
                 agv.currentState = AGVState.Idle;

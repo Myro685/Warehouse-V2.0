@@ -24,6 +24,11 @@ namespace WarehouseSim.Managers
 
         [Header("Settings")]
         public PathfindingAlgorithm activeAlgorithm = PathfindingAlgorithm.AStar;
+        
+        [Header("Visualization")]
+        [Tooltip("Pokud je zapnuto, ukáže na podlaze skladu, jak algoritmus prohledával prostor.")]
+        public bool enableLiveVisualization = true;
+        public PathfindingVisualizer visualizer;
 
         private IPathfinder _aStar;
         private IPathfinder _dijkstra;
@@ -60,48 +65,29 @@ namespace WarehouseSim.Managers
 
             ResetGridCosts();
 
-            // Aplikace vah kontextuálních překážek do Flow-Control systému.
-            // Zabraňuje jevu lokálních shluků propisováním soft-penalizací pro sousední trasy.
-            var taskSystem = FindFirstObjectByType<TaskSystem>();
-            if (taskSystem != null)
-            {
-                foreach (var agv in taskSystem.fleet)
-                {
-                    int curX = Mathf.RoundToInt(agv.transform.position.x / gridManager.gridConfig.nodeSize);
-                    int curY = Mathf.RoundToInt(agv.transform.position.z / gridManager.gridConfig.nodeSize);
-                    
-                    Node n1 = gridManager.GetNode(curX, curY);
-                    if (n1 != null) n1.TemporaryPenalty += 80;
-
-                    if (agv.CurrentTargetNode.x != -1)
-                    {
-                        Node n2 = gridManager.GetNode(agv.CurrentTargetNode.x, agv.CurrentTargetNode.y);
-                        if (n2 != null) n2.TemporaryPenalty += 80;
-                    }
-                    if (agv.PreviousTargetNode.x != -1)
-                    {
-                        Node n3 = gridManager.GetNode(agv.PreviousTargetNode.x, agv.PreviousTargetNode.y);
-                        if (n3 != null) n3.TemporaryPenalty += 80;
-                    }
-                    if (agv.FinalTargetNode.x != -1)
-                    {
-                        // Propis zvýšené váhy pro obsluhující sekci regálů
-                        Node n4 = gridManager.GetNode(agv.FinalTargetNode.x, agv.FinalTargetNode.y);
-                        if (n4 != null) n4.TemporaryPenalty += 500;
-                    }
-                }
-            }
-
             IPathfinder pathfinder = activeAlgorithm == PathfindingAlgorithm.AStar ? _aStar : _dijkstra;
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
-            List<Node> path = pathfinder.FindPath(startNode, targetNode, gridManager.Grid);
+            List<Node> path = pathfinder.FindPath(startNode, targetNode, gridManager.Grid, out List<Node> history);
+            int expandedCount = history.Count;
 
             sw.Stop();
+            
+            if (AnalyticsManager.Instance != null)
+            {
+                AnalyticsManager.Instance.RegisterPathfindingMetrics(sw.ElapsedTicks, expandedCount);
+            }
+            
+            // Spuštění animované vizualizace pro bakalářskou obhajobu
+            if (enableLiveVisualization && visualizer != null && history != null)
+            {
+                visualizer.VisualizeSearch(history, path, activeAlgorithm, gridManager, targetNode);
+            }
+            
             // Analytický log přeskočen pro běžné notifikace, tiskne se do skryté konzole.
-            UnityEngine.Debug.Log($"[{activeAlgorithm}] Cesta nalezena. Ticks: {sw.ElapsedTicks}. Počet kroků trasy: {path?.Count ?? 0}");
+            UnityEngine.Debug.Log($"[{activeAlgorithm}] Cesta nalezena. Ticks: {sw.ElapsedTicks}. Expandováno: {expandedCount}. Trasa: {path?.Count ?? 0} uzlů.");
 
             return path;
         }

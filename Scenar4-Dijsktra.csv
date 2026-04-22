@@ -1,0 +1,26 @@
+Warehouse Simulation - Analytics Report
+Datum generovani;2026-03-23 22:06:32
+
+Pouziti algoritmus;Dijkstra
+
+METRIKY VYSTUPU
+Celkova ujeta vzdalenost flotilou (m);100155,20
+Celkem doruceno palet/krabic;30
+
+PATHFINDING BENCHMARK (Nahrada za O Notaci)
+Celkovy pocet vypoctenych tras;1899
+Prumerny pocet expandovanych uzlu na trasu;494,11
+Prumerny cas CPU na trasu (Ticks);3819,13
+
+FLOTILA AGV
+Jmeno vozu;Zbyvajici Baterie %;Aktualni Stav
+AGV_1(Clone);85,9%;MovingToPickup
+AGV_1(Clone);0,0%;MovingToDropoff
+AGV_1(Clone);0,0%;Charging
+AGV_1(Clone);0,0%;Charging
+AGV_1(Clone);51,7%;Charging
+AGV_1(Clone);0,0%;Charging
+AGV_1(Clone);0,0%;Idle
+AGV_1(Clone);40,0%;MovingToPickup
+AGV_1(Clone);0,0%;MovingToDropoff
+AGV_1(Clone);0,0%;MovingToDropoff

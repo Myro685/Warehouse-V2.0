@@ -6,34 +6,27 @@ namespace WarehouseSim.Core
 {
     /// <summary>
     /// Implementace algoritmu A* (A-Star) pro hledání nejkratší cesty na mřížce.
-    /// Využívá heuristiku (H-Cost) pro směrové upřednostnění uzlů, čímž minimalizuje
-    /// počet iterativně prohledávaných stavů oproti Dijkstrově algoritmu.
+    /// Využívá heuristiku (Manhattan Distance) pro směrové upřednostnění uzlů,
+    /// čímž minimalizuje počet expandovaných stavů oproti Dijkstrově algoritmu.
+    /// Prioritní fronta (MinHeap) zajišťuje O(log n) extrakci minima.
     /// </summary>
     public class AStarPathfinder : IPathfinder
     {
-        public List<Node> FindPath(Node startNode, Node targetNode, Node[,] grid)
+        public List<Node> FindPath(Node startNode, Node targetNode, Node[,] grid, out List<Node> expandedNodesHistory)
         {
-            List<Node> openSet = new List<Node>();
+            expandedNodesHistory = new List<Node>();
+            MinHeap<Node> openSet = new MinHeap<Node>();
             HashSet<Node> closedSet = new HashSet<Node>();
             
-            openSet.Add(startNode);
             startNode.GCost = 0;
+            startNode.HCost = GetDistance(startNode, targetNode);
+            openSet.Insert(startNode);
 
             while (openSet.Count > 0)
             {
-                Node currentNode = openSet[0];
-                
-                for (int i = 1; i < openSet.Count; i++)
-                {
-                    if (openSet[i].FCost < currentNode.FCost || 
-                        (openSet[i].FCost == currentNode.FCost && openSet[i].HCost < currentNode.HCost))
-                    {
-                        currentNode = openSet[i];
-                    }
-                }
-
-                openSet.Remove(currentNode);
+                Node currentNode = openSet.ExtractMin();
                 closedSet.Add(currentNode);
+                expandedNodesHistory.Add(currentNode);
 
                 if (currentNode == targetNode)
                 {
@@ -50,7 +43,7 @@ namespace WarehouseSim.Core
                     
                     int moveCost = currentNode.GCost + 10 + staticPenalty + neighbour.TemporaryPenalty;
                     
-                    if (moveCost < neighbour.GCost || !openSet.Contains(neighbour))
+                    if (moveCost < neighbour.GCost)
                     {
                         neighbour.GCost = moveCost;
                         neighbour.HCost = GetDistance(neighbour, targetNode);
@@ -58,7 +51,11 @@ namespace WarehouseSim.Core
 
                         if (!openSet.Contains(neighbour))
                         {
-                            openSet.Add(neighbour);
+                            openSet.Insert(neighbour);
+                        }
+                        else
+                        {
+                            openSet.UpdateItem(neighbour);
                         }
                     }
                 }

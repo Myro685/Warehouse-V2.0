@@ -17,6 +17,11 @@ namespace WarehouseSim.Managers
         private int[,] _heatmapData;
         private int _maxVisits = 1;
 
+        // Pathfinding Benchmark Metriky
+        private long _totalPathfindingTicks = 0;
+        private int _totalExpandedNodes = 0;
+        private int _totalPathsCalculated = 0;
+
         [Header("Heatmap Visualization")]
         private GameObject _heatmapContainer;
         private MeshRenderer[,] _heatmapRenderers;
@@ -41,6 +46,13 @@ namespace WarehouseSim.Managers
         public void RegisterItemDelivered()
         {
             TotalItemsDelivered++;
+        }
+
+        public void RegisterPathfindingMetrics(long ticks, int expandedNodes)
+        {
+            _totalPathfindingTicks += ticks;
+            _totalExpandedNodes += expandedNodes;
+            _totalPathsCalculated++;
         }
 
         // ==========================================
@@ -191,8 +203,18 @@ namespace WarehouseSim.Managers
             csv.AppendLine("");
 
             csv.AppendLine("METRIKY VYSTUPU");
-            csv.AppendLine("Celkova ujeta vzdalenost (m);" + TotalDistanceTraveled.ToString("F2"));
-            csv.AppendLine("Celkem doruceno krabic;" + TotalItemsDelivered);
+            csv.AppendLine("Celkova ujeta vzdalenost flotilou (m);" + TotalDistanceTraveled.ToString("F2"));
+            csv.AppendLine("Celkem doruceno palet/krabic;" + TotalItemsDelivered);
+            csv.AppendLine("");
+            
+            csv.AppendLine("PATHFINDING BENCHMARK (Nahrada za O Notaci)");
+            csv.AppendLine("Celkovy pocet vypoctenych tras;" + _totalPathsCalculated);
+            
+            string avgExpanded = _totalPathsCalculated > 0 ? ((float)_totalExpandedNodes / _totalPathsCalculated).ToString("F2") : "0";
+            string avgTicks = _totalPathsCalculated > 0 ? ((float)_totalPathfindingTicks / _totalPathsCalculated).ToString("F2") : "0";
+            
+            csv.AppendLine("Prumerny pocet expandovanych uzlu na trasu;" + avgExpanded);
+            csv.AppendLine("Prumerny cas CPU na trasu (Ticks);" + avgTicks);
             csv.AppendLine("");
 
             TaskSystem ts = FindFirstObjectByType<TaskSystem>();

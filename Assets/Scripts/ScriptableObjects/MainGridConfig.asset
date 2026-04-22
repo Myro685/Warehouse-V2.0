@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d74e5c2f79afccc408082d068417f9a7, type: 3}
   m_Name: MainGridConfig
   m_EditorClassIdentifier: Assembly-CSharp::WarehouseSim.ScriptableObjects.GridConfig
-  gridX: 20
-  gridY: 20
+  gridX: 30
+  gridY: 30
   nodeSize: 4
   gizmoGap: 0

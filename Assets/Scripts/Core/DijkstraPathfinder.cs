@@ -6,33 +6,27 @@ namespace WarehouseSim.Core
 {
     /// <summary>
     /// Implementace Dijkstrova algoritmu pro hledání nejkratší cesty.
-    /// Abstrahuje heuristiku cíle a expanduje kruhově do dosažení cílového uzlu.
-    /// Poskytuje absolutní garanci nalození optimální cesty na úkor expanze stavového prostoru.
+    /// Abstrahuje heuristiku cíle (HCost = 0) a expanduje kruhově do dosažení cílového uzlu.
+    /// Poskytuje absolutní garanci nalezení optimální cesty na úkor rozsáhlejší expanze stavového prostoru.
+    /// Prioritní fronta (MinHeap) zajišťuje O(log n) extrakci minima.
     /// </summary>
     public class DijkstraPathfinder : IPathfinder
     {
-        public List<Node> FindPath(Node startNode, Node targetNode, Node[,] grid)
+        public List<Node> FindPath(Node startNode, Node targetNode, Node[,] grid, out List<Node> expandedNodesHistory)
         {
-            List<Node> openSet = new List<Node>();
+            expandedNodesHistory = new List<Node>();
+            MinHeap<Node> openSet = new MinHeap<Node>();
             HashSet<Node> closedSet = new HashSet<Node>();
             
-            openSet.Add(startNode);
             startNode.GCost = 0;
+            startNode.HCost = 0;
+            openSet.Insert(startNode);
 
             while (openSet.Count > 0)
             {
-                Node currentNode = openSet[0];
-                
-                for (int i = 1; i < openSet.Count; i++)
-                {
-                    if (openSet[i].GCost < currentNode.GCost)
-                    {
-                        currentNode = openSet[i];
-                    }
-                }
-
-                openSet.Remove(currentNode);
+                Node currentNode = openSet.ExtractMin();
                 closedSet.Add(currentNode);
+                expandedNodesHistory.Add(currentNode);
 
                 if (currentNode == targetNode)
                 {
@@ -49,7 +43,7 @@ namespace WarehouseSim.Core
 
                     int moveCost = currentNode.GCost + 10 + staticPenalty + neighbour.TemporaryPenalty;
                     
-                    if (moveCost < neighbour.GCost || !openSet.Contains(neighbour))
+                    if (moveCost < neighbour.GCost)
                     {
                         neighbour.GCost = moveCost;
                         neighbour.HCost = 0; 
@@ -57,7 +51,11 @@ namespace WarehouseSim.Core
 
                         if (!openSet.Contains(neighbour))
                         {
-                            openSet.Add(neighbour);
+                            openSet.Insert(neighbour);
+                        }
+                        else
+                        {
+                            openSet.UpdateItem(neighbour);
                         }
                     }
                 }
